@@ -23,6 +23,9 @@ COPY server/src ./server/src
 COPY server/scripts ./server/scripts
 COPY server/tsconfig.json ./server/
 # The server imports the shared core (validation) straight from src/core.
+# The root package.json must come along — its "type": "module" is what makes
+# those files load as ES modules.
+COPY package.json ./
 COPY src/core ./src/core
 COPY --from=build /app/dist ./dist
 
