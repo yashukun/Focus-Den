@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Focus Den backend — validated per-user state store with sync.",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch src/index.ts",
+    "start": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx src/index.ts",
     "reset-password": "tsx scripts/reset-password.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

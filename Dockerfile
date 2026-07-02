@@ -13,7 +13,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
-    DB_PATH=/data/focus-den.db
+    DB_PATH=/data/focus-den.db \
+    NODE_OPTIONS=--disable-warning=ExperimentalWarning
 
 COPY server/package.json server/package-lock.json ./server/
 RUN cd server && npm ci
