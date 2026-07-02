@@ -3,5 +3,9 @@ server/node_modules
 server/data
 dist
 .git
+.github
+docs
+deploy
+*.md
 *.tsbuildinfo
 Dockerfile

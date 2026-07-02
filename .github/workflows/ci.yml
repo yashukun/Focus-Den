@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install (frontend + server)
+        run: |
+          npm ci
+          npm ci --prefix server
+
+      - name: Typecheck
+        run: |
+          npm run typecheck
+          npm --prefix server run typecheck
+
+      - name: Test
+        run: |
+          npm test
+          npm --prefix server test
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --prefix server --omit=dev --audit-level=high

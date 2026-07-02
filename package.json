@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Focus Den — a single-user, focus-driven shift tracker with a cozy pixel room.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "vite",
     "server": "npm --prefix server run dev",
@@ -12,7 +15,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm --prefix server run typecheck && npm test && npm --prefix server test"
   },
   "dependencies": {
     "react": "^18.3.1",

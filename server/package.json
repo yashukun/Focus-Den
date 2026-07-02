@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Focus Den backend — validated per-user state store with sync.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch src/index.ts",
     "start": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx src/index.ts",

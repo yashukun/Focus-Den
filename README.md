@@ -25,6 +25,10 @@ npm run build               # typecheck + production build
 
 Vite proxies `/api` → the local server, so there's no CORS setup in dev.
 
+More for contributors in **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (code
+map, house rules, worked examples). CI runs typecheck + tests + build on every
+push.
+
 ## Sign in & sync
 
 On first launch you create a **profile** (name + password) against the backend.
@@ -64,7 +68,10 @@ the auth routes, a body-size cap on state uploads, tokens die with their
 account, it refuses to start in production without a real `JWT_SECRET`, and it
 serves the built frontend itself — **one small box runs the whole app**.
 
-Runs on any Docker host (e.g. AWS Lightsail / EC2):
+Full AWS walkthrough with best practices (Lightsail, HTTPS, backups, day-2
+ops): **[docs/DEPLOY-AWS.md](docs/DEPLOY-AWS.md)** — or the short version, on
+the server: `./deploy/aws-setup.sh focus.yourdomain.com` (idempotent; also how
+you update). Runs on any Docker host:
 
 ```bash
 docker build -t focus-den .
