@@ -27,7 +27,8 @@ Vite proxies `/api` → the local server, so there's no CORS setup in dev.
 
 More for contributors in **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (code
 map, house rules, worked examples). CI runs typecheck + tests + build on every
-push.
+push; deployed servers can auto-deploy the newest CI-green commit (see the
+deploy guide).
 
 ## Sign in & sync
 

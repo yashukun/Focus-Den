@@ -55,12 +55,33 @@ automatically and the app is live.
 
 ## 5. Updating the app
 
+Manually, any time:
+
 ```bash
 cd Focus-Den && git pull && ./deploy/aws-setup.sh focus.yourdomain.com
 ```
 
 User data is untouched — it lives on the `focus-den-data` volume, not in the
 image. Rollback = `git checkout <old-commit>` + re-run the script.
+
+### Auto-deploy (CD) — optional
+
+To make pushes deploy themselves: every 5 minutes the server asks GitHub for
+the newest commit on `main` **whose CI passed** and redeploys if it's new.
+Failing CI blocks deployment automatically; nothing to remember.
+
+1. GitHub → Settings → Developer settings → **Fine-grained tokens**: create a
+   token scoped to *only* this repository, read-only **Contents** +
+   **Actions** permissions.
+2. On the server:
+   ```bash
+   ./deploy/enable-auto-deploy.sh focus.yourdomain.com <that-token>
+   ```
+
+Watch it: `journalctl -u focus-den-deploy.service -f` · Disable:
+`sudo systemctl disable --now focus-den-deploy.timer`. A deploy restarts the
+app (a seconds-long sync blip for anyone mid-shift), so ship deliberately.
+Rollback under CD = revert the commit on `main`; the server follows.
 
 ## 6. Day-2 operations
 
