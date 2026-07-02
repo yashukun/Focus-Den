@@ -64,22 +64,28 @@ the auth routes, a body-size cap on state uploads, tokens die with their
 account, it refuses to start in production without a real `JWT_SECRET`, and it
 serves the built frontend itself — **one small box runs the whole app**.
 
-```bash
-# Fly.io (simplest; HTTPS + volume included)
-fly launch --copy-config --no-deploy   # rename `app` in fly.toml first
-fly volumes create focus_den_data --size 1
-fly secrets set JWT_SECRET="$(openssl rand -hex 32)"
-fly deploy
+Runs on any Docker host (e.g. AWS Lightsail / EC2):
 
-# …or any Docker host
+```bash
 docker build -t focus-den .
-docker run -d -p 8787:8787 -v focus-den-data:/data \
+docker run -d --name focus-den --restart unless-stopped \
+  -p 127.0.0.1:8787:8787 -v focus-den-data:/data \
   -e JWT_SECRET="$(openssl rand -hex 32)" focus-den
 ```
 
-Put HTTPS in front (Fly does this for you; on a VPS use Caddy/nginx). For
-off-box backups, stream the SQLite file to any S3-compatible bucket with
-**Litestream** — see `server/litestream.yml.example`.
+Put HTTPS in front with Caddy (automatic certificates) or nginx:
+
+```
+focus.example.com {
+    reverse_proxy localhost:8787
+}
+```
+
+Update a running deploy with `git pull && docker build -t focus-den . &&
+docker restart focus-den` — user data lives on the `focus-den-data` volume and
+survives rebuilds. For off-box backups, enable your host's disk snapshots
+and/or stream the SQLite file to any S3-compatible bucket with **Litestream**
+— see `server/litestream.yml.example`.
 
 Forgotten passwords (no email flow at this tier) are reset by the admin on the
 host: `npm --prefix server run reset-password -- <name> <new-password>`.

@@ -5,4 +5,3 @@ dist
 .git
 *.tsbuildinfo
 Dockerfile
-fly.toml
