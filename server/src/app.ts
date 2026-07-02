@@ -45,6 +45,8 @@ export interface AppOptions {
   trustProxy?: boolean;
   /** Allowed CORS origin(s); defaults to reflecting any (fine for dev). */
   corsOrigin?: string | boolean;
+  /** Normalized name of the single admin account; '*' = everyone (dev), null/undefined = nobody. */
+  adminUser?: string | null;
 }
 
 export async function buildApp(store: StateStore, secret: string, opts: AppOptions = {}) {
@@ -58,6 +60,10 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
   // suit the SPA: all assets are same-origin and scripts are external.
   await app.register(helmet);
   await app.register(cors, { origin: opts.corsOrigin ?? true });
+
+  // Admin gating is a UI concern (game rules are client-side by design) — the
+  // server just tells the client at sign-in whether this account is the admin.
+  const isAdminId = (id: string) => opts.adminUser === '*' || (!!opts.adminUser && id === opts.adminUser);
 
   // Generous global ceiling; the auth routes opt into the strict budget below.
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
@@ -88,7 +94,7 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
       // Seed the default with updatedAt=0 so the first real client edit always wins.
       store.putState(id, JSON.stringify(defaultState()), 0, 0);
       const token = signToken({ sub: id, name: trimmed, tv: 1 }, secret);
-      return { token, userId: id, name: trimmed };
+      return { token, userId: id, name: trimmed, isAdmin: isAdminId(id) };
     },
   );
 
@@ -103,7 +109,7 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
         return reply.code(401).send({ error: 'Incorrect name or password.' });
       }
       const token = signToken({ sub: id, name: user.name, tv: user.tokenVersion ?? 1 }, secret);
-      return { token, userId: id, name: user.name };
+      return { token, userId: id, name: user.name, isAdmin: isAdminId(id) };
     },
   );
 

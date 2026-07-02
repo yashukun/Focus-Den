@@ -13,6 +13,8 @@ export interface Account {
   salt: string;
   hash: string;
   createdAt: number;
+  /** admin status as reported by the server at the last online sign-in */
+  isAdmin?: boolean;
 }
 
 export interface AuthResult {
@@ -122,11 +124,11 @@ async function verifyLocal(password: string, salt: string, storedHash: string): 
 }
 
 /** Store/refresh a local account record so offline login works next time. */
-async function cacheAccount(id: string, name: string, password: string): Promise<void> {
+async function cacheAccount(id: string, name: string, password: string, isAdmin: boolean): Promise<void> {
   const salt = randomSalt();
   const hash = await hashPassword(password, salt);
   const accounts = readAccounts();
-  accounts[id] = { id, name, salt, hash, createdAt: accounts[id]?.createdAt ?? Date.now() };
+  accounts[id] = { id, name, salt, hash, createdAt: accounts[id]?.createdAt ?? Date.now(), isAdmin };
   writeAccounts(accounts);
 }
 
@@ -170,7 +172,7 @@ export async function signup(name: string, password: string): Promise<AuthResult
   try {
     const res = await api.signup(trimmed, password);
     setToken(res.token);
-    await cacheAccount(res.userId, res.name, password);
+    await cacheAccount(res.userId, res.name, password, res.isAdmin === true);
     setSession(res.userId);
     return { ok: true, userId: res.userId };
   } catch (err) {
@@ -184,7 +186,7 @@ export async function login(name: string, password: string): Promise<AuthResult>
   try {
     const res = await api.login(name, password);
     setToken(res.token);
-    await cacheAccount(res.userId, res.name, password);
+    await cacheAccount(res.userId, res.name, password, res.isAdmin === true);
     setSession(res.userId);
     return { ok: true, userId: res.userId };
   } catch (err) {

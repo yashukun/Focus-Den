@@ -66,6 +66,8 @@ export interface AuthResponse {
   token: string;
   userId: string;
   name: string;
+  /** whether this account is the server's designated admin */
+  isAdmin?: boolean;
 }
 
 export interface StateResponse {

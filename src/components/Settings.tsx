@@ -250,21 +250,25 @@ export function Settings({ state, session }: SettingsProps) {
         {backupsMsg && <p className="muted setting-msg">{backupsMsg}</p>}
       </section>
 
-      <section className="card">
-        <div className="card-head"><h2>Testing tools</h2></div>
-        <p className="muted">Helpers for trying things out — not part of the normal loop.</p>
-        <div className="manage-row">
-          <button className="btn btn-sm" onClick={() => store.devGrantPoints(100)}>+100 pts</button>
-          <button className="btn btn-sm" onClick={() => store.devGrantPoints(500)}>+500 pts</button>
-          <button className="btn btn-sm" onClick={() => store.buy('perk_streak_freeze')} title="Adds a streak freeze (costs points)">Buy freeze</button>
-        </div>
-      </section>
+      {session.isAdmin && (
+        <section className="card">
+          <div className="card-head"><h2>Testing tools <span className="muted">(admin)</span></h2></div>
+          <p className="muted">Helpers for trying things out — not part of the normal loop.</p>
+          <div className="manage-row">
+            <button className="btn btn-sm" onClick={() => store.devGrantPoints(100)}>+100 pts</button>
+            <button className="btn btn-sm" onClick={() => store.devGrantPoints(500)}>+500 pts</button>
+            <button className="btn btn-sm" onClick={() => store.buy('perk_streak_freeze')} title="Adds a streak freeze (costs points)">Buy freeze</button>
+          </div>
+        </section>
+      )}
 
-      <section className="card manage-danger">
-        <div className="card-head"><h2>Danger zone</h2></div>
-        <p className="muted">Wipe all saved data and start completely fresh.</p>
-        <button className="btn btn-danger btn-block" onClick={resetAll}>Reset everything</button>
-      </section>
+      {session.isAdmin && (
+        <section className="card manage-danger">
+          <div className="card-head"><h2>Danger zone <span className="muted">(admin)</span></h2></div>
+          <p className="muted">Wipe all saved data and start completely fresh.</p>
+          <button className="btn btn-danger btn-block" onClick={resetAll}>Reset everything</button>
+        </section>
+      )}
     </div>
   );
 }

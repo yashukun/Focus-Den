@@ -26,6 +26,11 @@ export const env = {
   trustProxy: (process.env.TRUST_PROXY ?? (isProduction ? 'true' : 'false')) === 'true',
   /** Pin CORS to the real origin in production (e.g. https://focus.example.com). */
   corsOrigin: process.env.CORS_ORIGIN || true,
+  /**
+   * The single admin account (normalized name). Admins see the testing tools
+   * and reset. Unset: everyone is admin in dev ('*'), nobody in production.
+   */
+  adminUser: (process.env.ADMIN_USER ?? '').trim().toLowerCase() || (isProduction ? null : '*'),
 };
 
 if (env.jwtSecret.startsWith('dev-only')) {

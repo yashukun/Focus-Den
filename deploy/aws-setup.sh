@@ -12,7 +12,8 @@
 
 set -euo pipefail
 
-DOMAIN="${1:?Usage: ./deploy/aws-setup.sh <your-domain>   e.g. focus.example.com}"
+DOMAIN="${1:?Usage: ./deploy/aws-setup.sh <your-domain> [admin-name]   e.g. focus.example.com yash}"
+ADMIN_NAME="${2:-}"
 
 echo "==> Installing Docker + Caddy (skips if present)"
 sudo apt-get update -qq
@@ -24,6 +25,12 @@ sudo mkdir -p /etc/focus-den
 if ! sudo test -f /etc/focus-den/env; then
   echo "JWT_SECRET=$(openssl rand -hex 32)" | sudo tee /etc/focus-den/env >/dev/null
   sudo chmod 600 /etc/focus-den/env
+fi
+
+# The single admin account (sees testing tools + reset). Set once; change by
+# editing /etc/focus-den/env and re-running this script.
+if [ -n "$ADMIN_NAME" ] && ! sudo grep -q '^ADMIN_USER=' /etc/focus-den/env; then
+  echo "ADMIN_USER=$(printf '%s' "$ADMIN_NAME" | tr '[:upper:]' '[:lower:]')" | sudo tee -a /etc/focus-den/env >/dev/null
 fi
 
 echo "==> Building the app image"

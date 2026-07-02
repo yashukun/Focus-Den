@@ -51,6 +51,8 @@ import { sync } from './sync';
 export interface SessionInfo {
   userId: string;
   name: string;
+  /** the server-designated admin sees testing tools + reset */
+  isAdmin: boolean;
 }
 
 export interface Snapshot {
@@ -148,6 +150,7 @@ function notifyDurationComplete(t: PlanTicket): void {
 
 let userId: string | null = null;
 let userName: string | null = null;
+let userIsAdmin = false;
 let state: State = defaultState();
 let summary: ShiftSummary | null = null;
 
@@ -162,6 +165,7 @@ let summary: ShiftSummary | null = null;
   }
   userId = sid;
   userName = account.name;
+  userIsAdmin = account.isAdmin === true;
   state = loadState(sid);
 })();
 
@@ -169,7 +173,7 @@ function makeSnapshot(): Snapshot {
   return {
     state,
     summary,
-    session: userId ? { userId, name: userName ?? userId } : null,
+    session: userId ? { userId, name: userName ?? userId, isAdmin: userIsAdmin } : null,
   };
 }
 
@@ -630,6 +634,7 @@ export const store = {
     if (!account) return;
     userId = id;
     userName = account.name;
+    userIsAdmin = account.isAdmin === true;
     state = loadState(id); // instant local render
     summary = null;
     publish();
@@ -642,6 +647,7 @@ export const store = {
     sync.stop();
     userId = null;
     userName = null;
+    userIsAdmin = false;
     state = defaultState();
     summary = null;
     publish();
@@ -669,6 +675,7 @@ export const store = {
     auth.deleteAccount(id);
     userId = null;
     userName = null;
+    userIsAdmin = false;
     state = defaultState();
     summary = null;
     publish();
@@ -677,18 +684,21 @@ export const store = {
 
   // ── Maintenance / testing ──────────────────────────────────────────────────
 
+  /** Admin-only (UI-gated; the guard here keeps casual misuse out too). */
   resetAll(): void {
-    if (!userId) return;
+    if (!userId || !userIsAdmin) return;
     summary = null;
     clearState(userId);
     setState(defaultState());
   },
 
   /**
-   * Testing-only: credit points directly, bypassing the clock-out/purchase
-   * rule. Lets you exercise the shop + room loop without grinding a full shift.
+   * Admin/testing-only: credit points directly, bypassing the
+   * clock-out/purchase rule. Lets you exercise the shop + room loop without
+   * grinding a full shift.
    */
   devGrantPoints(amount: number): void {
+    if (!userIsAdmin) return;
     if (!Number.isFinite(amount) || amount === 0) return;
     setState({ ...state, points: Math.max(0, state.points + amount) });
   },

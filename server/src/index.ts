@@ -7,6 +7,7 @@ const app = await buildApp(store, env.jwtSecret, {
   staticDir: env.staticDir ?? undefined,
   trustProxy: env.trustProxy,
   corsOrigin: env.corsOrigin,
+  adminUser: env.adminUser,
 });
 
 // Exit promptly and cleanly on Ctrl+C / tsx-watch restarts / docker stop —

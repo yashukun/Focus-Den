@@ -134,6 +134,26 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
     expect((await app.inject({ method: 'GET', url: '/api/state', headers: fresh })).statusCode).toBe(200);
   });
 
+  it('flags only the designated admin account', async () => {
+    const app = await buildApp(makeStore(), 'test-secret', { adminUser: 'boss' });
+    const boss = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Boss', password: 'pass1234' } });
+    expect(boss.json().isAdmin).toBe(true);
+    const pal = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Pal', password: 'pass1234' } });
+    expect(pal.json().isAdmin).toBe(false);
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { name: 'boss', password: 'pass1234' } });
+    expect(login.json().isAdmin).toBe(true);
+
+    // No adminUser configured (production default) → nobody is admin.
+    const strict = await buildApp(makeStore(), 'test-secret');
+    const su = await strict.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Solo', password: 'pass1234' } });
+    expect(su.json().isAdmin).toBe(false);
+
+    // '*' (dev fallback) → everyone is admin.
+    const dev = await buildApp(makeStore(), 'test-secret', { adminUser: '*' });
+    const anyone = await dev.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Anyone', password: 'pass1234' } });
+    expect(anyone.json().isAdmin).toBe(true);
+  });
+
   it('rate-limits repeated auth attempts', async () => {
     const app = await makeApp();
     let limited = 0;
