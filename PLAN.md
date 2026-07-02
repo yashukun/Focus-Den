@@ -17,6 +17,8 @@ Locked decisions:
 
 ## Phase 0 — Security hardening (before inviting anyone) ~1 day
 
+**Status: ✅ completed 2026-07-02** (all items below shipped and verified)
+
 Ordered by severity (from the 2026-07-02 security review):
 
 1. **Dependency upgrades (critical/high CVEs)** — Fastify 4.28 → 5.9 with

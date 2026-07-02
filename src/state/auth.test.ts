@@ -70,7 +70,7 @@ describe('auth (API-backed with offline fallback)', () => {
   });
 
   it('signs up via the server and caches the account locally', async () => {
-    const res = await signup('Sam', 'hunter2');
+    const res = await signup('Sam', 'hunter22');
     expect(res.ok).toBe(true);
     expect(res.userId).toBe('sam');
     expect(listAccounts()).toHaveLength(1);
@@ -78,9 +78,9 @@ describe('auth (API-backed with offline fallback)', () => {
   });
 
   it('never caches the password in plaintext', async () => {
-    await signup('Sam', 'hunter2');
+    await signup('Sam', 'hunter22');
     const acc = getAccount('sam')!;
-    expect(acc.hash).not.toContain('hunter2');
+    expect(acc.hash).not.toContain('hunter22');
     expect(acc.salt.length).toBeGreaterThan(0);
   });
 
@@ -91,26 +91,26 @@ describe('auth (API-backed with offline fallback)', () => {
   });
 
   it('rejects a duplicate name (server 409)', async () => {
-    await signup('Sam', 'hunter2');
+    await signup('Sam', 'hunter22');
     const dup = await signup('SAM', 'whatever');
     expect(dup.ok).toBe(false);
     expect(dup.error).toMatch(/taken/i);
   });
 
   it('logs in with the correct password and rejects a wrong one', async () => {
-    await signup('Sam', 'hunter2');
+    await signup('Sam', 'hunter22');
     logout();
     expect((await login('Sam', 'wrong')).ok).toBe(false);
-    const good = await login('sam', 'hunter2');
+    const good = await login('sam', 'hunter22');
     expect(good.ok).toBe(true);
     expect(good.userId).toBe('sam');
   });
 
   it('falls back to the local cache when offline', async () => {
-    await signup('Sam', 'hunter2'); // online: caches account locally
+    await signup('Sam', 'hunter22'); // online: caches account locally
     logout();
     installFetch(true); // now offline
-    const offline = await login('Sam', 'hunter2');
+    const offline = await login('Sam', 'hunter22');
     expect(offline.ok).toBe(true);
     expect(offline.userId).toBe('sam');
     expect((await login('Sam', 'wrongpass')).ok).toBe(false);

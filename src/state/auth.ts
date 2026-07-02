@@ -25,7 +25,9 @@ const ACCOUNTS_KEY = 'focus-den/accounts';
 const SESSION_KEY = 'focus-den/session';
 
 const NAME_MAX = 20;
-const PASSWORD_MIN = 4;
+const PASSWORD_MIN = 8;
+/** Mirrors the server rule: letters/numbers first, then also space . _ ' - */
+const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u;
 
 // ── local cache helpers ──────────────────────────────────────────────────────
 
@@ -81,15 +83,42 @@ function djb2(str: string): string {
   return `w${h.toString(16)}`;
 }
 
+/**
+ * PBKDF2-SHA256 (150k iterations) — slow enough that a stolen laptop's cached
+ * hash can't be brute-forced quickly. `v2:`-prefixed to distinguish from the
+ * legacy single-round SHA-256 caches, which remain verifiable until the next
+ * online sign-in refreshes them.
+ */
 async function hashPassword(password: string, salt: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    const enc = new TextEncoder();
+    const key = await subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const bits = await subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: 150_000 },
+      key,
+      256,
+    );
+    return `v2:${toHex(new Uint8Array(bits))}`;
+  }
+  return djb2(`${salt}:${password}`);
+}
+
+/** Legacy cache format: single-round SHA-256 (or djb2 without WebCrypto). */
+async function legacyHash(password: string, salt: string): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   const input = `${salt}:${password}`;
   if (subtle) {
-    const data = new TextEncoder().encode(input);
-    const buf = await subtle.digest('SHA-256', data);
+    const buf = await subtle.digest('SHA-256', new TextEncoder().encode(input));
     return toHex(new Uint8Array(buf));
   }
   return djb2(input);
+}
+
+/** Verify against either hash generation (old caches upgrade on next online login). */
+async function verifyLocal(password: string, salt: string, storedHash: string): Promise<boolean> {
+  if (storedHash.startsWith('v2:')) return (await hashPassword(password, salt)) === storedHash;
+  return (await legacyHash(password, salt)) === storedHash;
 }
 
 /** Store/refresh a local account record so offline login works next time. */
@@ -132,6 +161,9 @@ export async function signup(name: string, password: string): Promise<AuthResult
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: 'Enter a name.' };
   if (trimmed.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
+  if (!NAME_RE.test(trimmed)) {
+    return { ok: false, error: "Names can use letters, numbers, spaces and . _ ' -" };
+  }
   if (password.length < PASSWORD_MIN) {
     return { ok: false, error: `Password must be at least ${PASSWORD_MIN} characters.` };
   }
@@ -163,8 +195,7 @@ export async function login(name: string, password: string): Promise<AuthResult>
     // Network error → offline fallback if we've signed in on this device before.
     const cached = readAccounts()[id];
     if (cached) {
-      const hash = await hashPassword(password, cached.salt);
-      if (hash === cached.hash) {
+      if (await verifyLocal(password, cached.salt, cached.hash)) {
         setSession(id);
         return { ok: true, userId: id };
       }

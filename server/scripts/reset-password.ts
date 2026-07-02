@@ -18,8 +18,8 @@ if (!name || !newPassword) {
   console.error('Usage: npm run reset-password -- <name> <new-password>');
   process.exit(1);
 }
-if (newPassword.length < 4) {
-  console.error('Password must be at least 4 characters.');
+if (newPassword.length < 8) {
+  console.error('Password must be at least 8 characters.');
   process.exit(1);
 }
 
@@ -33,5 +33,9 @@ if (!user) {
 }
 
 const { salt, hash } = hashPassword(newPassword);
-store.createUser({ ...user, salt, hash });
-console.log(`Password reset for "${user.name}". They can sign in with the new password now.`);
+// Bumping tokenVersion revokes every previously issued login token.
+store.createUser({ ...user, salt, hash, tokenVersion: (user.tokenVersion ?? 1) + 1 });
+console.log(
+  `Password reset for "${user.name}". All existing sessions are signed out; ` +
+    `they can sign in with the new password now.`,
+);

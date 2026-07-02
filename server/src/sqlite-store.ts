@@ -24,11 +24,12 @@ export class SqliteStore implements StateStore {
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS users (
-        id        TEXT PRIMARY KEY,
-        name      TEXT NOT NULL,
-        salt      TEXT NOT NULL,
-        hash      TEXT NOT NULL,
-        createdAt INTEGER NOT NULL
+        id           TEXT PRIMARY KEY,
+        name         TEXT NOT NULL,
+        salt         TEXT NOT NULL,
+        hash         TEXT NOT NULL,
+        createdAt    INTEGER NOT NULL,
+        tokenVersion INTEGER NOT NULL DEFAULT 1
       );
       CREATE TABLE IF NOT EXISTS states (
         userId    TEXT PRIMARY KEY,
@@ -45,6 +46,12 @@ export class SqliteStore implements StateStore {
         PRIMARY KEY (userId, rev)
       );
     `);
+    // Databases created before token revocation existed lack the column.
+    try {
+      this.db.exec('ALTER TABLE users ADD COLUMN tokenVersion INTEGER NOT NULL DEFAULT 1');
+    } catch {
+      // column already exists
+    }
   }
 
   getUser(id: string): UserRow | undefined {
@@ -54,11 +61,11 @@ export class SqliteStore implements StateStore {
   createUser(user: UserRow): void {
     this.db
       .prepare(
-        `INSERT INTO users (id, name, salt, hash, createdAt) VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO users (id, name, salt, hash, createdAt, tokenVersion) VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, salt = excluded.salt,
-           hash = excluded.hash, createdAt = excluded.createdAt`,
+           hash = excluded.hash, createdAt = excluded.createdAt, tokenVersion = excluded.tokenVersion`,
       )
-      .run(user.id, user.name, user.salt, user.hash, user.createdAt);
+      .run(user.id, user.name, user.salt, user.hash, user.createdAt, user.tokenVersion ?? 1);
   }
 
   deleteUser(id: string): void {

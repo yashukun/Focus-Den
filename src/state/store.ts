@@ -45,7 +45,7 @@ import {
 import { clearState, coerceState, loadState, saveState } from './persist';
 import { play } from '../audio';
 import * as auth from './auth';
-import { api, setToken, type RevisionMeta } from './api';
+import { api, ApiError, setToken, type RevisionMeta } from './api';
 import { sync } from './sync';
 
 export interface SessionInfo {
@@ -647,14 +647,21 @@ export const store = {
     publish();
   },
 
-  /** Delete the signed-in profile (server + local) and end the session. */
-  async deleteCurrentAccount(): Promise<void> {
-    if (!userId) return;
+  /**
+   * Delete the signed-in profile (server + local) and end the session.
+   * Destructive and irreversible, so the server confirms the password first —
+   * nothing is deleted (anywhere) unless it accepts.
+   */
+  async deleteCurrentAccount(password: string): Promise<{ ok: boolean; error?: string }> {
+    if (!userId) return { ok: false, error: 'Not signed in.' };
     const id = userId;
     try {
-      await api.deleteAccount();
-    } catch {
-      // best-effort; local cleanup still proceeds
+      await api.deleteAccount(password);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        return { ok: false, error: err.status === 401 ? 'Incorrect password.' : err.message };
+      }
+      return { ok: false, error: 'Can’t reach the server — deleting needs a connection.' };
     }
     setToken(null);
     sync.stop();
@@ -665,6 +672,7 @@ export const store = {
     state = defaultState();
     summary = null;
     publish();
+    return { ok: true };
   },
 
   // ── Maintenance / testing ──────────────────────────────────────────────────

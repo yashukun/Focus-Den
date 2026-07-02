@@ -57,14 +57,13 @@ export function Settings({ state, session }: SettingsProps) {
     if (ok) void loadBackups();
   }
 
-  function deleteProfile() {
-    if (
-      window.confirm(
-        `Delete the profile "${session.name}"? This permanently removes its den, points, and history from this device.`,
-      )
-    ) {
-      store.deleteCurrentAccount();
-    }
+  async function deleteProfile() {
+    const password = window.prompt(
+      `Delete the profile "${session.name}"? This permanently removes its den, points, history and all server backups.\n\nEnter the profile password to confirm:`,
+    );
+    if (!password) return;
+    const result = await store.deleteCurrentAccount(password);
+    if (!result.ok) setMsg(result.error ?? 'Delete failed.');
   }
 
   function downloadBackup() {
@@ -114,7 +113,7 @@ export function Settings({ state, session }: SettingsProps) {
         </p>
         <div className="manage-row">
           <button className="btn btn-sm" onClick={() => store.signOut()}>Sign out</button>
-          <button className="btn btn-sm" onClick={deleteProfile}>Delete profile</button>
+          <button className="btn btn-sm" onClick={() => void deleteProfile()}>Delete profile</button>
         </div>
       </section>
 

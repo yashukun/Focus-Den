@@ -29,12 +29,14 @@ function b64url(buf: Buffer): string {
 export interface TokenPayload {
   sub: string;
   name?: string;
+  /** token version — must match the account's current version (revocation) */
+  tv?: number;
   iat?: number;
   exp?: number;
 }
 
 export function signToken(
-  payload: { sub: string; name?: string },
+  payload: { sub: string; name?: string; tv?: number },
   secret: string,
   ttlSec = 60 * 60 * 24 * 30,
 ): string {

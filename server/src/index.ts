@@ -7,6 +7,7 @@ const store = makeStore(env.dbPath, legacyJsonDbPath);
 const app = await buildApp(store, env.jwtSecret, {
   staticDir: env.staticDir,
   trustProxy: env.trustProxy,
+  corsOrigin: env.corsOrigin,
 });
 
 app

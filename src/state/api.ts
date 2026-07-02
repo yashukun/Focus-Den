@@ -99,7 +99,8 @@ export const api = {
   listRevisions: () => req<{ revisions: RevisionMeta[] }>('/state/revisions', { auth: true }),
   restoreRevision: (rev: number) =>
     req<StateResponse>(`/state/revisions/${rev}/restore`, { method: 'POST', auth: true }),
-  deleteAccount: () => req<{ ok: boolean }>('/account', { method: 'DELETE', auth: true }),
+  deleteAccount: (password: string) =>
+    req<{ ok: boolean }>('/account', { method: 'DELETE', auth: true, body: { password } }),
   health: () =>
     fetch(BASE + '/health')
       .then((r) => r.ok)

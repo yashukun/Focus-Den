@@ -92,7 +92,7 @@ export function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === 'signup' ? 'At least 4 characters' : 'Your password'}
+              placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
             />
           </label>
@@ -110,7 +110,8 @@ export function Login() {
         </form>
 
         <p className="muted login-note">
-          🔒 Profiles are stored only on this device. Don’t use a real password.
+          🔒 Your den syncs to your own server. Use a password you don’t use
+          anywhere else.
         </p>
       </div>
     </div>

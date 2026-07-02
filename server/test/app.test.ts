@@ -63,9 +63,15 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
     const noAuth = await app.inject({ method: 'GET', url: '/api/state' });
     expect(noAuth.statusCode).toBe(401);
 
+    // deletion requires the password — a stolen bearer token alone won't do.
+    const delNoPw = await app.inject({ method: 'DELETE', url: '/api/account', headers: auth });
+    expect(delNoPw.statusCode).toBe(401);
+    const delBadPw = await app.inject({ method: 'DELETE', url: '/api/account', headers: auth, payload: { password: 'wrong-guess' } });
+    expect(delBadPw.statusCode).toBe(401);
+
     // delete account → the user row is gone AND the old token is dead (no
     // route can lazily resurrect a "ghost" state for a deleted account).
-    const del = await app.inject({ method: 'DELETE', url: '/api/account', headers: auth });
+    const del = await app.inject({ method: 'DELETE', url: '/api/account', headers: auth, payload: { password: 'pass1234' } });
     expect(del.statusCode).toBe(200);
     const relogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { name: 'Sam', password: 'pass1234' } });
     expect(relogin.statusCode).toBe(401); // user removed
@@ -95,6 +101,37 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
     // So an honest later write from another device still wins.
     const p2 = await app.inject({ method: 'PUT', url: '/api/state', headers: auth, payload: { doc: { ...defaultState(), points: 2 }, updatedAt: Date.now() } });
     expect(p2.json().accepted).toBe(true);
+  });
+
+  it('rejects names with control or symbol characters', async () => {
+    const app = await makeApp();
+    for (const name of ['a\tb', '<script>', '../etc', 'x'.repeat(2)+'\u202e']) {
+      const res = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name, password: 'pass1234' } });
+      expect(res.statusCode).toBe(400);
+    }
+    const ok = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: "Sam O'Neil-2", password: 'pass1234' } });
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it('revokes old tokens when the password is reset (tokenVersion bump)', async () => {
+    const store = makeStore();
+    const app = await buildApp(store, 'test-secret');
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Rey', password: 'pass1234' } });
+    const oldAuth = { authorization: `Bearer ${su.json().token}` };
+
+    // old token works…
+    expect((await app.inject({ method: 'GET', url: '/api/state', headers: oldAuth })).statusCode).toBe(200);
+
+    // …admin resets the password (as scripts/reset-password.ts does)…
+    const user = store.getUser('rey')!;
+    store.createUser({ ...user, tokenVersion: (user.tokenVersion ?? 1) + 1 });
+
+    // …old token is now dead; a fresh login works and gets a valid token.
+    expect((await app.inject({ method: 'GET', url: '/api/state', headers: oldAuth })).statusCode).toBe(401);
+    const relogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { name: 'Rey', password: 'pass1234' } });
+    expect(relogin.statusCode).toBe(200);
+    const fresh = { authorization: `Bearer ${relogin.json().token}` };
+    expect((await app.inject({ method: 'GET', url: '/api/state', headers: fresh })).statusCode).toBe(200);
   });
 
   it('rate-limits repeated auth attempts', async () => {

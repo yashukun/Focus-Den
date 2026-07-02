@@ -14,6 +14,8 @@ export interface UserRow {
   salt: string;
   hash: string;
   createdAt: number;
+  /** bumped on password reset to revoke all previously issued tokens */
+  tokenVersion?: number;
 }
 
 export interface StateRow {

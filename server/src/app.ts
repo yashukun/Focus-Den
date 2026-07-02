@@ -14,6 +14,7 @@
 import { existsSync } from 'node:fs';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { coerceState, defaultState } from '../../src/core';
@@ -22,7 +23,9 @@ import { shouldAccept } from './reconcile';
 import type { StateStore } from './store';
 
 const NAME_MAX = 20;
-const PASSWORD_MIN = 4;
+const PASSWORD_MIN = 8;
+/** Printable display names: start with a letter/number, then the same plus space . _ ' - */
+const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u;
 const idFor = (name: string) => name.trim().toLowerCase();
 
 /** Max state-document upload. Years of history fit in well under this. */
@@ -40,6 +43,8 @@ export interface AppOptions {
   staticDir?: string;
   /** Trust X-Forwarded-* headers (set when behind a reverse proxy / PaaS). */
   trustProxy?: boolean;
+  /** Allowed CORS origin(s); defaults to reflecting any (fine for dev). */
+  corsOrigin?: string | boolean;
 }
 
 export async function buildApp(store: StateStore, secret: string, opts: AppOptions = {}) {
@@ -49,7 +54,10 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
     trustProxy: opts.trustProxy ?? false,
   });
 
-  await app.register(cors, { origin: true });
+  // Security headers (CSP, nosniff, frame-ancestors, …). Helmet's defaults
+  // suit the SPA: all assets are same-origin and scripts are external.
+  await app.register(helmet);
+  await app.register(cors, { origin: opts.corsOrigin ?? true });
 
   // Generous global ceiling; the auth routes opt into the strict budget below.
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
@@ -66,6 +74,9 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
       if (trimmed.length > NAME_MAX) {
         return reply.code(400).send({ error: `Name must be ${NAME_MAX} characters or fewer.` });
       }
+      if (!NAME_RE.test(trimmed)) {
+        return reply.code(400).send({ error: 'Names can use letters, numbers, spaces and . _ \' -' });
+      }
       if (!password || password.length < PASSWORD_MIN) {
         return reply.code(400).send({ error: `Password must be at least ${PASSWORD_MIN} characters.` });
       }
@@ -73,10 +84,10 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
       if (store.getUser(id)) return reply.code(409).send({ error: 'That name is taken — try signing in.' });
 
       const { salt, hash } = hashPassword(password);
-      store.createUser({ id, name: trimmed, salt, hash, createdAt: Date.now() });
+      store.createUser({ id, name: trimmed, salt, hash, createdAt: Date.now(), tokenVersion: 1 });
       // Seed the default with updatedAt=0 so the first real client edit always wins.
       store.putState(id, JSON.stringify(defaultState()), 0, 0);
-      const token = signToken({ sub: id, name: trimmed }, secret);
+      const token = signToken({ sub: id, name: trimmed, tv: 1 }, secret);
       return { token, userId: id, name: trimmed };
     },
   );
@@ -91,7 +102,7 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
       if (!user || !password || !verifyPassword(password, user.salt, user.hash)) {
         return reply.code(401).send({ error: 'Incorrect name or password.' });
       }
-      const token = signToken({ sub: id, name: user.name }, secret);
+      const token = signToken({ sub: id, name: user.name, tv: user.tokenVersion ?? 1 }, secret);
       return { token, userId: id, name: user.name };
     },
   );
@@ -101,8 +112,11 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
     const token = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : null;
     const payload = token ? verifyToken(token, secret) : null;
     // The account must still exist — a deleted account's token is dead, so no
-    // route can lazily resurrect a "ghost" state for it.
-    if (!payload || !store.getUser(payload.sub)) {
+    // route can lazily resurrect a "ghost" state for it. The token's version
+    // must also match the account's (a password reset bumps it, revoking all
+    // previously issued tokens).
+    const user = payload ? store.getUser(payload.sub) : undefined;
+    if (!payload || !user || (payload.tv ?? 1) !== (user.tokenVersion ?? 1)) {
       return reply.code(401).send({ error: 'Unauthorized.' });
     }
     req.userId = payload.sub;
@@ -157,7 +171,14 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
     },
   );
 
-  app.delete('/api/account', { preHandler: requireAuth }, async (req: AuthedRequest) => {
+  // Deleting an account destroys its state and every backup revision — a
+  // stolen bearer token alone must not be enough, so the password is required.
+  app.delete('/api/account', { preHandler: requireAuth }, async (req: AuthedRequest, reply) => {
+    const { password } = (req.body ?? {}) as { password?: string };
+    const user = store.getUser(req.userId!)!;
+    if (!password || !verifyPassword(password, user.salt, user.hash)) {
+      return reply.code(401).send({ error: 'Incorrect password.' });
+    }
     store.deleteUser(req.userId!);
     return { ok: true };
   });

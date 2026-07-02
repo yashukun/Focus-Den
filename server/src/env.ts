@@ -19,6 +19,8 @@ export const env = {
   staticDir: process.env.STATIC_DIR ?? fileURLToPath(new URL('../../dist', import.meta.url)),
   /** Behind a PaaS / reverse proxy, client IPs arrive in X-Forwarded-For. */
   trustProxy: (process.env.TRUST_PROXY ?? (isProduction ? 'true' : 'false')) === 'true',
+  /** Pin CORS to the real origin in production (e.g. https://focus.example.com). */
+  corsOrigin: process.env.CORS_ORIGIN || true,
 };
 
 if (env.jwtSecret.startsWith('dev-only')) {

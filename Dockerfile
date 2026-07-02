@@ -25,7 +25,10 @@ COPY server/tsconfig.json ./server/
 COPY src/core ./src/core
 COPY --from=build /app/dist ./dist
 
-# SQLite lives on a mounted volume so data survives redeploys.
+# SQLite lives on a mounted volume so data survives redeploys. Run as the
+# unprivileged node user; /data must be writable by it.
+RUN mkdir -p /data && chown node:node /data
+USER node
 VOLUME /data
 EXPOSE 8787
 
