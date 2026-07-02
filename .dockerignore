@@ -1,0 +1,8 @@
+node_modules
+server/node_modules
+server/data
+dist
+.git
+*.tsbuildinfo
+Dockerfile
+fly.toml

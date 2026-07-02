@@ -1,0 +1,30 @@
+{
+  "name": "focus-den",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Focus Den — a single-user, focus-driven shift tracker with a cozy pixel room.",
+  "scripts": {
+    "dev": "vite",
+    "server": "npm --prefix server run dev",
+    "dev:all": "concurrently -k -n web,api -c cyan,magenta \"npm run dev\" \"npm run server\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.0",
+    "vitest": "^4.1.9"
+  }
+}

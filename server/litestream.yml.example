@@ -1,0 +1,26 @@
+# Litestream — continuous SQLite replication to object storage (the off-box
+# backup layer). Install litestream on the host, copy this to litestream.yml,
+# fill in the bucket + credentials, then run the server under it:
+#
+#   litestream replicate -config litestream.yml
+#
+# or wrap the app so both run together:
+#
+#   litestream replicate -config litestream.yml -exec "npm start"
+#
+# Restore (disaster recovery):
+#
+#   litestream restore -config litestream.yml /data/focus-den.db
+
+dbs:
+  - path: /data/focus-den.db
+    replicas:
+      - type: s3
+        bucket: YOUR_BUCKET_NAME
+        path: focus-den
+        region: us-east-1
+        # Works with any S3-compatible store (AWS S3, Backblaze B2, Cloudflare
+        # R2, MinIO). For non-AWS, set endpoint accordingly:
+        # endpoint: https://s3.us-west-000.backblazeb2.com
+        access-key-id: YOUR_ACCESS_KEY
+        secret-access-key: YOUR_SECRET_KEY
