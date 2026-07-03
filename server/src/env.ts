@@ -28,9 +28,10 @@ export const env = {
   corsOrigin: process.env.CORS_ORIGIN || true,
   /**
    * The single admin account (normalized name). Admins see the testing tools
-   * and reset. Unset: everyone is admin in dev ('*'), nobody in production.
+   * and reset. Unset: the account named "admin" in dev, nobody in production
+   * (set ADMIN_USER explicitly when deploying).
    */
-  adminUser: (process.env.ADMIN_USER ?? '').trim().toLowerCase() || (isProduction ? null : '*'),
+  adminUser: (process.env.ADMIN_USER ?? '').trim().toLowerCase() || (isProduction ? null : 'admin'),
   /** Sender for account emails, e.g. "Focus Den <no-reply@example.com>". Unset → console mailer. */
   sesFrom: process.env.SES_FROM || null,
   /** AWS region for SES (falls back to the SDK's AWS_REGION resolution). */

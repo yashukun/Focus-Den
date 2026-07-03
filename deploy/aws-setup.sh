@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-DOMAIN="${1:?Usage: ./deploy/aws-setup.sh <your-domain> [admin-name]   e.g. focus.example.com yash}"
+DOMAIN="${1:?Usage: ./deploy/aws-setup.sh <your-domain> [admin-name]   e.g. focus.example.com admin}"
 ADMIN_NAME="${2:-}"
 
 echo "==> Installing Docker + Caddy (skips if present)"
