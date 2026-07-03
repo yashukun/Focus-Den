@@ -42,7 +42,33 @@ At your DNS provider: **A record** for `focus` → the Lightsail **static IP**.
 Once it propagates (minutes–hours), Caddy fetches the certificate
 automatically and the app is live.
 
-## 4. Backups — do both, they cover different disasters
+## 4. Account emails (verification + password reset) — AWS SES
+
+Signup verification and "forgot password" send email through **SES**. Without
+this section the app still runs — those emails just print to the server log.
+
+1. **SES console** (pick one region, e.g. `us-east-1`) → **Identities →
+   Create identity** → verify your **domain** (adds a few DNS records; also
+   enables DKIM so mail lands in inboxes, not spam).
+2. **Leave the sandbox**: SES starts in sandbox mode (can only mail verified
+   addresses). Request **production access** in the SES console — a short
+   form, usually approved within a day. Until then, verify your friends'
+   addresses manually or wait.
+3. **Least-privilege credentials**: IAM → user `focus-den-mailer` → policy
+   allowing only `ses:SendEmail` (scope it to your identity's ARN) → create an
+   access key.
+4. Add to `/etc/focus-den/env` on the server, then restart the container:
+   ```
+   SES_FROM=Focus Den <no-reply@yourdomain.com>
+   SES_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=...
+   AWS_SECRET_ACCESS_KEY=...
+   APP_URL=https://focus.yourdomain.com
+   ```
+   (`APP_URL` is what the emailed links point at — set it or links say
+   localhost.)
+
+## 5. Backups — do both, they cover different disasters
 
 1. **Lightsail snapshots** (whole-machine): instance page → Snapshots →
    **enable automatic daily snapshots**. Covers "the machine died / I broke it".
@@ -53,7 +79,7 @@ automatically and the app is live.
    (never commit it), fill in the bucket + keys, and run Litestream alongside
    the app (its docs cover a systemd unit).
 
-## 5. Updating the app
+## 6. Updating the app
 
 Manually, any time:
 
@@ -83,7 +109,7 @@ Watch it: `journalctl -u focus-den-deploy.service -f` · Disable:
 app (a seconds-long sync blip for anyone mid-shift), so ship deliberately.
 Rollback under CD = revert the commit on `main`; the server follows.
 
-## 6. Day-2 operations
+## 7. Day-2 operations
 
 | Task | Command (on the server) |
 |---|---|
@@ -96,7 +122,7 @@ Rollback under CD = revert the commit on `main`; the server follows.
 User-level restores need no admin at all: Settings → **Server backups** in the
 app restores any of the last 30 synced states.
 
-## 7. Security checklist (what's already handled vs. yours to keep)
+## 8. Security checklist (what's already handled vs. yours to keep)
 
 Already built in: HTTPS redirect, security headers, per-IP rate-limited auth,
 password hashing (scrypt), token revocation, non-root container, localhost-only

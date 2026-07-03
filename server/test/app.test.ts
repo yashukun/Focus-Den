@@ -11,23 +11,24 @@ const ENGINES: [string, () => StateStore][] = [
 ];
 
 describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
-  const makeApp = () => buildApp(makeStore(), 'test-secret'); // in-memory store
+  const silentMailer = { send: async () => {} };
+  const makeApp = () => buildApp(makeStore(), 'test-secret', { mailer: silentMailer }); // in-memory store
   it('signup → login → put/get round-trip, LWW, validation, auth', async () => {
     const app = await makeApp();
 
     // signup
-    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Sam', password: 'pass1234' } });
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Sam', email: 'u1@t.dev', password: 'pass1234' } });
     expect(su.statusCode).toBe(200);
     const token: string = su.json().token;
     expect(token).toBeTruthy();
     const auth = { authorization: `Bearer ${token}` };
 
     // duplicate name (case-insensitive) → 409
-    const dup = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'sam', password: 'pass1234' } });
+    const dup = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'sam', email: 'u2@t.dev', password: 'pass1234' } });
     expect(dup.statusCode).toBe(409);
 
     // short password → 400
-    const short = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Ann', password: 'no' } });
+    const short = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Ann', email: 'u3@t.dev', password: 'no' } });
     expect(short.statusCode).toBe(400);
 
     // wrong password → 401
@@ -89,7 +90,7 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
 
   it('clamps future client timestamps to the server clock', async () => {
     const app = await makeApp();
-    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Kim', password: 'pass1234' } });
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Kim', email: 'u4@t.dev', password: 'pass1234' } });
     const auth = { authorization: `Bearer ${su.json().token}` };
 
     // A device claiming an edit 10 minutes in the future gets clamped to now.
@@ -106,17 +107,17 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
   it('rejects names with control or symbol characters', async () => {
     const app = await makeApp();
     for (const name of ['a\tb', '<script>', '../etc', 'x'.repeat(2)+'\u202e']) {
-      const res = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name, password: 'pass1234' } });
+      const res = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name, email: 'loop@t.dev', password: 'pass1234' } });
       expect(res.statusCode).toBe(400);
     }
-    const ok = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: "Sam O'Neil-2", password: 'pass1234' } });
+    const ok = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: "Sam O'Neil-2", email: 'u5@t.dev', password: 'pass1234' } });
     expect(ok.statusCode).toBe(200);
   });
 
   it('revokes old tokens when the password is reset (tokenVersion bump)', async () => {
     const store = makeStore();
-    const app = await buildApp(store, 'test-secret');
-    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Rey', password: 'pass1234' } });
+    const app = await buildApp(store, 'test-secret', { mailer: silentMailer });
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Rey', email: 'u6@t.dev', password: 'pass1234' } });
     const oldAuth = { authorization: `Bearer ${su.json().token}` };
 
     // old token works…
@@ -135,22 +136,22 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
   });
 
   it('flags only the designated admin account', async () => {
-    const app = await buildApp(makeStore(), 'test-secret', { adminUser: 'boss' });
-    const boss = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Boss', password: 'pass1234' } });
+    const app = await buildApp(makeStore(), 'test-secret', { adminUser: 'boss', mailer: silentMailer });
+    const boss = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Boss', email: 'u7@t.dev', password: 'pass1234' } });
     expect(boss.json().isAdmin).toBe(true);
-    const pal = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Pal', password: 'pass1234' } });
+    const pal = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Pal', email: 'u8@t.dev', password: 'pass1234' } });
     expect(pal.json().isAdmin).toBe(false);
     const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { name: 'boss', password: 'pass1234' } });
     expect(login.json().isAdmin).toBe(true);
 
     // No adminUser configured (production default) → nobody is admin.
-    const strict = await buildApp(makeStore(), 'test-secret');
-    const su = await strict.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Solo', password: 'pass1234' } });
+    const strict = await buildApp(makeStore(), 'test-secret', { mailer: silentMailer });
+    const su = await strict.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Solo', email: 'u9@t.dev', password: 'pass1234' } });
     expect(su.json().isAdmin).toBe(false);
 
     // '*' (dev fallback) → everyone is admin.
-    const dev = await buildApp(makeStore(), 'test-secret', { adminUser: '*' });
-    const anyone = await dev.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Anyone', password: 'pass1234' } });
+    const dev = await buildApp(makeStore(), 'test-secret', { adminUser: '*', mailer: silentMailer });
+    const anyone = await dev.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Anyone', email: 'u10@t.dev', password: 'pass1234' } });
     expect(anyone.json().isAdmin).toBe(true);
   });
 
@@ -167,7 +168,7 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
 
   it('keeps revision history and restores a chosen revision', async () => {
     const app = await makeApp();
-    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Rev', password: 'pass1234' } });
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Rev', email: 'u11@t.dev', password: 'pass1234' } });
     const auth = { authorization: `Bearer ${su.json().token}` };
 
     await app.inject({ method: 'PUT', url: '/api/state', headers: auth, payload: { doc: { ...defaultState(), points: 10 }, updatedAt: 1000 } });
@@ -194,5 +195,94 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
     expect(missing.statusCode).toBe(404);
     const bad = await app.inject({ method: 'POST', url: '/api/state/revisions/nope/restore', headers: auth });
     expect(bad.statusCode).toBe(400);
+  });
+
+  it('email flows: verification, login-by-email, forgot/reset', async () => {
+    const inbox: { to: string; subject: string; text: string }[] = [];
+    const mailer = { send: async (to: string, subject: string, text: string) => void inbox.push({ to, subject, text }) };
+    const app = await buildApp(makeStore(), 'test-secret', { mailer });
+    const linkToken = (text: string, param: 'reset' | 'verify') =>
+      new RegExp(`[?&]${param}=([A-Za-z0-9_-]+)`).exec(text)?.[1] ?? '';
+
+    // signup normalizes the email and sends a verification link
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Flow', email: 'Flow@Test.dev', password: 'pass1234' } });
+    expect(su.json().email).toBe('flow@test.dev');
+    expect(su.json().emailVerified).toBe(false);
+    expect(inbox.length).toBe(1);
+    expect(inbox[0].to).toBe('flow@test.dev');
+
+    // duplicate email → 409; junk email → 400
+    expect((await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Other', email: 'flow@test.dev', password: 'pass1234' } })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Junk', email: 'not-an-email', password: 'pass1234' } })).statusCode).toBe(400);
+
+    // login works by email AND by username
+    expect((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { identifier: 'flow@test.dev', password: 'pass1234' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { identifier: 'Flow', password: 'pass1234' } })).statusCode).toBe(200);
+
+    // forgot before verification → generic ok, but no mail goes out
+    const before = inbox.length;
+    expect((await app.inject({ method: 'POST', url: '/api/auth/forgot', payload: { email: 'flow@test.dev' } })).json().ok).toBe(true);
+    expect(inbox.length).toBe(before);
+
+    // verify → flag flips; the link is single-use
+    const vTok = linkToken(inbox[0].text, 'verify');
+    expect((await app.inject({ method: 'POST', url: '/api/auth/verify', payload: { token: vTok } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/auth/verify', payload: { token: vTok } })).statusCode).toBe(400);
+
+    // forgot now emails a reset link (and unknown emails still answer ok)
+    expect((await app.inject({ method: 'POST', url: '/api/auth/forgot', payload: { email: 'stranger@t.dev' } })).json().ok).toBe(true);
+    await app.inject({ method: 'POST', url: '/api/auth/forgot', payload: { email: 'flow@test.dev' } });
+    const rTok = linkToken(inbox[inbox.length - 1].text, 'reset');
+    expect(rTok).not.toBe('');
+
+    // reset: too-short password rejected; success signs in + revokes old sessions
+    expect((await app.inject({ method: 'POST', url: '/api/auth/reset', payload: { token: rTok, password: 'short' } })).statusCode).toBe(400);
+    const oldToken = su.json().token;
+    const reset = await app.inject({ method: 'POST', url: '/api/auth/reset', payload: { token: rTok, password: 'newpass9999' } });
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json().emailVerified).toBe(true);
+    expect((await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${oldToken}` } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${reset.json().token}` } })).statusCode).toBe(200);
+
+    // the reset token is single-use; old password dead, new one works
+    expect((await app.inject({ method: 'POST', url: '/api/auth/reset', payload: { token: rTok, password: 'anotherpass1' } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { identifier: 'Flow', password: 'pass1234' } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { identifier: 'Flow', password: 'newpass9999' } })).statusCode).toBe(200);
+  });
+
+  it('account management: change password, logout-all, change email', async () => {
+    const inbox: { to: string; text: string }[] = [];
+    const mailer = { send: async (to: string, _s: string, text: string) => void inbox.push({ to, text }) };
+    const app = await buildApp(makeStore(), 'test-secret', { mailer });
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Mgr', email: 'mgr@t.dev', password: 'pass1234' } });
+    let auth = { authorization: `Bearer ${su.json().token}` };
+
+    // account view (never exposes hash/salt)
+    const info = await app.inject({ method: 'GET', url: '/api/account', headers: auth });
+    expect(info.json()).toMatchObject({ userId: 'mgr', email: 'mgr@t.dev', emailVerified: false });
+    expect(info.json().hash).toBeUndefined();
+
+    // change password: wrong current → 401; success → this device re-keyed, others dead
+    expect((await app.inject({ method: 'POST', url: '/api/account/password', headers: auth, payload: { currentPassword: 'nope', newPassword: 'newpass9999' } })).statusCode).toBe(401);
+    const chg = await app.inject({ method: 'POST', url: '/api/account/password', headers: auth, payload: { currentPassword: 'pass1234', newPassword: 'newpass9999' } });
+    expect(chg.statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/account', headers: auth })).statusCode).toBe(401);
+    auth = { authorization: `Bearer ${chg.json().token}` };
+    expect((await app.inject({ method: 'GET', url: '/api/account', headers: auth })).statusCode).toBe(200);
+
+    // sign out everywhere: same re-key pattern
+    const la = await app.inject({ method: 'POST', url: '/api/account/logout-all', headers: auth });
+    expect(la.statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/account', headers: auth })).statusCode).toBe(401);
+    auth = { authorization: `Bearer ${la.json().token}` };
+
+    // change email: password-confirmed, resets verification, sends a new link
+    const mails = inbox.length;
+    const ce = await app.inject({ method: 'POST', url: '/api/account/email', headers: auth, payload: { password: 'newpass9999', email: 'NEW@t.dev' } });
+    expect(ce.statusCode).toBe(200);
+    expect(ce.json()).toMatchObject({ email: 'new@t.dev', emailVerified: false });
+    expect(inbox.length).toBe(mails + 1);
+    expect(inbox[inbox.length - 1].to).toBe('new@t.dev');
+    expect((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { identifier: 'new@t.dev', password: 'newpass9999' } })).statusCode).toBe(200);
   });
 });

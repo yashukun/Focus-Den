@@ -3,7 +3,7 @@
  * onboarding replay, reset, and (clearly labeled) testing tools.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SOUNDSCAPE_IDS, SOUNDSCAPE_LABELS, type Appearance, type State, type ThemeId } from '../core';
 import { store, type SessionInfo } from '../state/store';
 import type { RevisionMeta } from '../state/api';
@@ -57,6 +57,11 @@ export function Settings({ state, session }: SettingsProps) {
     if (ok) void loadBackups();
   }
 
+  // Show fresh account facts (email verified? changed elsewhere?) when opening.
+  useEffect(() => {
+    void store.refreshAccount();
+  }, []);
+
   async function deleteProfile() {
     const password = window.prompt(
       `Delete the profile "${session.name}"? This permanently removes its den, points, history and all server backups.\n\nEnter the profile password to confirm:`,
@@ -64,6 +69,35 @@ export function Settings({ state, session }: SettingsProps) {
     if (!password) return;
     const result = await store.deleteCurrentAccount(password);
     if (!result.ok) setMsg(result.error ?? 'Delete failed.');
+  }
+
+  async function changePassword() {
+    const current = window.prompt('Current password:');
+    if (!current) return;
+    const next = window.prompt('New password (at least 8 characters):');
+    if (!next) return;
+    const result = await store.changePassword(current, next);
+    setMsg(result.ok ? 'Password changed ✓ — every other device was signed out.' : result.error ?? 'Failed.');
+  }
+
+  async function changeEmail() {
+    const password = window.prompt('Your password:');
+    if (!password) return;
+    const email = window.prompt('New email address:');
+    if (!email) return;
+    const result = await store.changeEmail(password, email);
+    setMsg(result.ok ? 'Email updated — check your inbox for the verification link.' : result.error ?? 'Failed.');
+  }
+
+  async function signOutEverywhere() {
+    if (!window.confirm('Sign out on every device? (This one stays signed in.)')) return;
+    const result = await store.signOutEverywhere();
+    setMsg(result.ok ? 'All other sessions signed out ✓' : result.error ?? 'Failed.');
+  }
+
+  async function resendVerification() {
+    const result = await store.resendVerification();
+    setMsg(result.ok ? 'Verification email sent — check your inbox.' : result.error ?? 'Failed.');
   }
 
   function downloadBackup() {
@@ -111,7 +145,33 @@ export function Settings({ state, session }: SettingsProps) {
           Signed in as <strong style={{ color: 'var(--ink)' }}>{session.name}</strong> · changes save
           on this device instantly and sync to your server.
         </p>
+        <p className="muted">
+          Email:{' '}
+          {session.email ? (
+            <>
+              <strong style={{ color: 'var(--ink)' }}>{session.email}</strong>{' '}
+              {session.emailVerified ? (
+                <span title="Verified — password recovery is available">✓ verified</span>
+              ) : (
+                <>
+                  <span title="Unverified — password recovery won’t work yet">⚠ not verified</span>{' '}
+                  <button className="btn btn-sm" onClick={() => void resendVerification()}>Resend link</button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <em>none yet</em> — add one to enable password recovery{' '}
+              <button className="btn btn-sm" onClick={() => void changeEmail()}>Add email</button>
+            </>
+          )}
+        </p>
         <div className="manage-row">
+          <button className="btn btn-sm" onClick={() => void changePassword()}>Change password</button>
+          {session.email && (
+            <button className="btn btn-sm" onClick={() => void changeEmail()}>Change email</button>
+          )}
+          <button className="btn btn-sm" onClick={() => void signOutEverywhere()}>Sign out everywhere</button>
           <button className="btn btn-sm" onClick={() => store.signOut()}>Sign out</button>
           <button className="btn btn-sm" onClick={() => void deleteProfile()}>Delete profile</button>
         </div>

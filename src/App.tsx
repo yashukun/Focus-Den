@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { isActive } from './core';
 import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume } from './audio';
 import { useNow, useStore } from './state/hooks';
+import { confirmEmail } from './state/auth';
 import { store } from './state/store';
 import { Dashboard } from './components/Dashboard';
 import { RoomView } from './components/RoomView';
@@ -19,10 +20,67 @@ import { SummaryModal } from './components/SummaryModal';
 import { DeepWork } from './components/DeepWork';
 import { Onboarding } from './components/Onboarding';
 import { Login } from './components/Login';
+import { ResetPassword } from './components/ResetPassword';
 import { STATUS_META } from './components/statusMeta';
 import { applyTheme, resolvedAppearance } from './theme';
 
 type Tab = 'dashboard' | 'plan' | 'room' | 'history' | 'settings';
+
+/** Tokens arriving via email links (/?reset=… or /?verify=…), captured once. */
+function takeUrlToken(param: 'reset' | 'verify'): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get(param);
+  if (value) {
+    params.delete(param);
+    const rest = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
+  }
+  return value;
+}
+
+const SYNC_LABELS = {
+  synced: 'Synced with your server',
+  pending: 'Saving to your server…',
+  offline: 'Offline — changes saved on this device, will sync later',
+  expired: 'Session expired — sign in to resume syncing',
+} as const;
+
+/** Inline re-login: keeps all local work, resumes syncing on success. */
+function SessionExpiredBar() {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !password) return;
+    setBusy(true);
+    setError(null);
+    const res = await store.reauthenticate(password);
+    setBusy(false);
+    if (!res.ok) setError(res.error ?? 'Sign-in failed.');
+  }
+
+  return (
+    <form className="expired-bar" onSubmit={submit}>
+      <span>Your session expired — your work is safe on this device. Sign in to resume syncing:</span>
+      <input
+        className="input"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        autoComplete="current-password"
+        aria-label="Password"
+      />
+      <button className="btn btn-sm btn-primary" type="submit" disabled={busy || !password}>
+        {busy ? '…' : 'Sign in'}
+      </button>
+      {error && <span className="login-error">{error}</span>}
+    </form>
+  );
+}
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '⏱' },
@@ -34,11 +92,24 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export default function App() {
   const now = useNow();
-  const { state, summary, session } = useStore();
+  const { state, summary, session, syncStatus } = useStore();
   const [tab, setTab] = useState<Tab>('dashboard');
   const [soundOn, setSoundOn] = useState(() => !isMuted());
+  const [resetToken, setResetToken] = useState<string | null>(() => takeUrlToken('reset'));
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
 
   const { settings, perks } = state;
+
+  // Handle an email-verification link (works signed in or out).
+  useEffect(() => {
+    const token = takeUrlToken('verify');
+    if (!token) return;
+    void confirmEmail(token).then((res) => {
+      setVerifyMsg(res.ok ? 'Email verified ✓' : res.error ?? 'Verification failed.');
+      if (res.ok) void store.refreshAccount();
+      window.setTimeout(() => setVerifyMsg(null), 6000);
+    });
+  }, []);
 
   // Apply the active theme + appearance.
   useEffect(() => {
@@ -86,6 +157,8 @@ export default function App() {
   }, [state.shift.clean]);
 
   // Auth gate — all hooks above run unconditionally so order stays stable.
+  // A reset link takes precedence over everything (it must work signed out).
+  if (resetToken) return <ResetPassword token={resetToken} onDone={() => setResetToken(null)} />;
   if (!session) return <Login />;
 
   const appearance = resolvedAppearance(settings.theme, settings.appearance);
@@ -115,6 +188,12 @@ export default function App() {
         </div>
 
         <div className="header-right">
+          <span
+            className={`sync-dot sync-${syncStatus}`}
+            title={SYNC_LABELS[syncStatus]}
+            role="status"
+            aria-label={SYNC_LABELS[syncStatus]}
+          />
           <button
             className="header-user"
             onClick={() => setTab('settings')}
@@ -154,6 +233,9 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {syncStatus === 'expired' && <SessionExpiredBar />}
+      {verifyMsg && <div className="verify-banner">{verifyMsg}</div>}
 
       <nav className="tabbar" aria-label="Primary">
         {TABS.map((t) => (

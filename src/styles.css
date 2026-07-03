@@ -1011,6 +1011,60 @@ p { margin: 0; }
 .setting-row:last-child { margin-bottom: 0; }
 .setting-msg { margin-top: 0.6rem; }
 
+/* ── Accounts v1: login extras, sync status, session banners ─────────────── */
+
+.password-row { display: flex; gap: 0.4rem; align-items: center; }
+.password-row .input { flex: 1; }
+
+.login-heading { margin: 0.4rem 0 0; font-size: 1.1rem; }
+.login-link {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.2rem;
+  align-self: center;
+}
+.login-link:hover { color: var(--ink); }
+
+.sync-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.sync-synced { background: #5fae62; }
+.sync-pending { background: #d9a23c; }
+.sync-offline { background: var(--ink-soft); opacity: 0.5; }
+.sync-expired { background: #d05a5a; box-shadow: 0 0 0 3px color-mix(in srgb, #d05a5a 25%, transparent); }
+
+.expired-bar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.9rem;
+  background: color-mix(in srgb, #d05a5a 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, #d05a5a 35%, var(--line));
+  border-radius: 10px;
+  margin: 0.6rem 0.9rem 0;
+  font-size: 0.9rem;
+}
+.expired-bar .input { max-width: 180px; padding: 0.35rem 0.6rem; }
+
+.verify-banner {
+  margin: 0.6rem 0.9rem 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, #5fae62 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, #5fae62 35%, var(--line));
+  font-size: 0.9rem;
+}
+
 .backup-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
 .backup-row {
   display: flex;

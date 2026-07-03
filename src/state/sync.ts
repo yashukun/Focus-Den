@@ -42,7 +42,12 @@ interface StoreHooks {
   getState: () => State;
   getUserId: () => string | null;
   adoptRemote: (state: State) => void;
+  /** Called whenever the sync status may have changed (re-publish to the UI). */
+  onStatusChange?: () => void;
 }
+
+/** What the header shows about this device's relationship with the server. */
+export type SyncStatus = 'synced' | 'pending' | 'offline' | 'expired';
 
 const DEBOUNCE_MS = 1200;
 const metaKey = (userId: string) => `focus-den/sync/${userId}`;
@@ -112,9 +117,15 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 let dirty = false;
 let flushing = false;
 let started = false;
+/** Set when the server rejected our token (expired/revoked) — needs re-login. */
+let authExpired = false;
 
 function online(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine;
+}
+
+function notifyStatus(): void {
+  hooks?.onStatusChange?.();
 }
 
 function schedule(): void {
@@ -131,11 +142,13 @@ async function flush(): Promise<void> {
   if (!userId || !getToken() || !online() || !dirty) return;
 
   flushing = true;
-  const state = hooks.getState();
-  const meta = readMeta(userId);
-  const updatedAt = meta.updatedAt ?? syncNow();
+  notifyStatus();
   try {
+    const state = hooks.getState();
+    const meta = readMeta(userId);
+    const updatedAt = meta.updatedAt ?? syncNow();
     const res = await api.putState(state, updatedAt);
+    authExpired = false;
     if (res.accepted) {
       writeMeta(userId, { updatedAt: res.updatedAt, rev: res.rev });
       dirty = false;
@@ -146,12 +159,16 @@ async function flush(): Promise<void> {
       dirty = false;
     }
   } catch (err) {
-    // Auth failure clears nothing here; network errors just retry on reconnect.
-    if (err instanceof ApiError && err.status === 401) dirty = false;
-    // else keep dirty
+    if (err instanceof ApiError && err.status === 401) {
+      // Token expired or revoked. KEEP the dirty flag — the local copy is the
+      // user's work; it pushes as soon as they re-authenticate.
+      authExpired = true;
+    }
+    // network errors: keep dirty, retry on reconnect
   } finally {
     flushing = false;
-    if (dirty) schedule(); // changed again mid-flight (or retry pending)
+    if (dirty && !authExpired) schedule(); // changed mid-flight (or retry pending)
+    notifyStatus();
   }
 }
 
@@ -165,15 +182,32 @@ export const sync = {
     if (started || typeof window === 'undefined') return;
     started = true;
     window.addEventListener('online', () => {
+      notifyStatus();
       // Re-calibrate on reconnect — the clock may have drifted or been reset
       // while offline (laptop sleep, timezone/NTP changes).
       void calibrate(true)
         .then(() => sync.pullAndReconcile())
         .then(() => flush());
     });
+    window.addEventListener('offline', notifyStatus);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') void flush();
     });
+  },
+
+  /** What to show in the header. */
+  getStatus(): SyncStatus {
+    if (authExpired) return 'expired';
+    if (!online()) return 'offline';
+    if (dirty || flushing) return 'pending';
+    return 'synced';
+  },
+
+  /** Call after a successful re-login: clears the expiry flag and pushes. */
+  authRestored(): void {
+    authExpired = false;
+    notifyStatus();
+    void sync.pullAndReconcile().then(() => flush());
   },
 
   /** Record a local change and schedule a push. */
@@ -185,6 +219,7 @@ export const sync = {
     writeMeta(userId, { ...meta, updatedAt: syncNow() });
     dirty = true;
     schedule();
+    notifyStatus();
   },
 
   /** Pull the server copy and adopt whichever side is newer. */
@@ -220,5 +255,6 @@ export const sync = {
       timer = null;
     }
     dirty = false;
+    authExpired = false;
   },
 };

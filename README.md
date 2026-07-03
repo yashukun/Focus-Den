@@ -32,11 +32,18 @@ deploy guide).
 
 ## Sign in & sync
 
-On first launch you create a **profile** (name + password) against the backend.
-Passwords are hashed server-side with **scrypt + a per-user salt** (never stored
-in plaintext); the client keeps a JWT and a small local account cache so a
-returning user can also sign in **offline**. Each profile has its own den,
-points, planner, and history; sign out / delete from **Settings → Account**.
+On first launch you create a **profile** (name + email + password) against the
+backend; a verification link lands in your inbox (AWS SES — or the server log
+in dev). Sign in later with **your username or your email**, and use **Forgot
+password?** on the sign-in screen for an emailed reset link (verified emails
+only). Passwords are hashed server-side with **scrypt + a per-user salt**
+(never stored in plaintext); the client keeps a JWT and a small local account
+cache so a returning user can also sign in **offline**. Accounts are permanent
+— nothing is ever auto-deleted; only the owner can delete their profile
+(password-confirmed). **Settings → Account** covers change password / change
+email / sign out everywhere / delete, and the header shows live sync status —
+if a session expires, a banner re-authenticates in place without losing local
+work.
 
 Changes save to `localStorage` instantly and push to the server (debounced); on
 sign-in / reconnect the app pulls and adopts whichever copy is newer. You can

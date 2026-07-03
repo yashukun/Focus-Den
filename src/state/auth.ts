@@ -15,6 +15,16 @@ export interface Account {
   createdAt: number;
   /** admin status as reported by the server at the last online sign-in */
   isAdmin?: boolean;
+  /** account email (normalized) as of the last online sign-in */
+  email?: string | null;
+  emailVerified?: boolean;
+}
+
+/** Server-reported facts cached alongside the offline-login hash. */
+interface AccountFacts {
+  isAdmin: boolean;
+  email: string | null;
+  emailVerified: boolean;
 }
 
 export interface AuthResult {
@@ -30,6 +40,8 @@ const NAME_MAX = 20;
 const PASSWORD_MIN = 8;
 /** Mirrors the server rule: letters/numbers first, then also space . _ ' - */
 const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u;
+/** Mirrors the server's pragmatic email shape check. */
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@.]{2,24}$/;
 
 // ── local cache helpers ──────────────────────────────────────────────────────
 
@@ -124,11 +136,45 @@ async function verifyLocal(password: string, salt: string, storedHash: string): 
 }
 
 /** Store/refresh a local account record so offline login works next time. */
-async function cacheAccount(id: string, name: string, password: string, isAdmin: boolean): Promise<void> {
+async function cacheAccount(id: string, name: string, password: string, facts: AccountFacts): Promise<void> {
   const salt = randomSalt();
   const hash = await hashPassword(password, salt);
   const accounts = readAccounts();
-  accounts[id] = { id, name, salt, hash, createdAt: accounts[id]?.createdAt ?? Date.now(), isAdmin };
+  accounts[id] = {
+    id,
+    name,
+    salt,
+    hash,
+    createdAt: accounts[id]?.createdAt ?? Date.now(),
+    ...facts,
+  };
+  writeAccounts(accounts);
+}
+
+function factsOf(res: { isAdmin?: boolean; email?: string | null; emailVerified?: boolean }): AccountFacts {
+  return {
+    isAdmin: res.isAdmin === true,
+    email: res.email ?? null,
+    emailVerified: res.emailVerified === true,
+  };
+}
+
+/** Update the cached server facts (email/verified/admin) without touching the hash. */
+export function updateAccountFacts(id: string, facts: Partial<AccountFacts>): void {
+  const accounts = readAccounts();
+  if (!accounts[id]) return;
+  accounts[id] = { ...accounts[id], ...facts };
+  writeAccounts(accounts);
+}
+
+/** Re-hash the offline-login cache after an in-app password change. */
+export async function updateCachedPassword(id: string, password: string): Promise<void> {
+  const account = readAccounts()[id];
+  if (!account) return;
+  const salt = randomSalt();
+  const hash = await hashPassword(password, salt);
+  const accounts = readAccounts();
+  accounts[id] = { ...account, salt, hash };
   writeAccounts(accounts);
 }
 
@@ -159,20 +205,23 @@ export function logout(): void {
   setSession(null);
 }
 
-export async function signup(name: string, password: string): Promise<AuthResult> {
+export async function signup(name: string, email: string, password: string): Promise<AuthResult> {
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: 'Enter a name.' };
   if (trimmed.length > NAME_MAX) return { ok: false, error: `Name must be ${NAME_MAX} characters or fewer.` };
   if (!NAME_RE.test(trimmed)) {
     return { ok: false, error: "Names can use letters, numbers, spaces and . _ ' -" };
   }
+  if (!EMAIL_RE.test(email.trim().toLowerCase())) {
+    return { ok: false, error: 'Enter a valid email address.' };
+  }
   if (password.length < PASSWORD_MIN) {
     return { ok: false, error: `Password must be at least ${PASSWORD_MIN} characters.` };
   }
   try {
-    const res = await api.signup(trimmed, password);
+    const res = await api.signup(trimmed, email.trim(), password);
     setToken(res.token);
-    await cacheAccount(res.userId, res.name, password, res.isAdmin === true);
+    await cacheAccount(res.userId, res.name, password, factsOf(res));
     setSession(res.userId);
     return { ok: true, userId: res.userId };
   } catch (err) {
@@ -181,12 +230,13 @@ export async function signup(name: string, password: string): Promise<AuthResult
   }
 }
 
-export async function login(name: string, password: string): Promise<AuthResult> {
-  const id = idFor(name);
+/** Sign in with a username OR an email address. */
+export async function login(identifier: string, password: string): Promise<AuthResult> {
+  const who = identifier.trim();
   try {
-    const res = await api.login(name, password);
+    const res = await api.login(who, password);
     setToken(res.token);
-    await cacheAccount(res.userId, res.name, password, res.isAdmin === true);
+    await cacheAccount(res.userId, res.name, password, factsOf(res));
     setSession(res.userId);
     return { ok: true, userId: res.userId };
   } catch (err) {
@@ -195,15 +245,59 @@ export async function login(name: string, password: string): Promise<AuthResult>
       return { ok: false, error: err.message };
     }
     // Network error → offline fallback if we've signed in on this device before.
-    const cached = readAccounts()[id];
+    const cached = who.includes('@')
+      ? Object.values(readAccounts()).find((a) => a.email === who.toLowerCase())
+      : readAccounts()[idFor(who)];
     if (cached) {
       if (await verifyLocal(password, cached.salt, cached.hash)) {
-        setSession(id);
-        return { ok: true, userId: id };
+        setSession(cached.id);
+        return { ok: true, userId: cached.id };
       }
       return { ok: false, error: 'Incorrect password.' };
     }
     return { ok: false, error: 'Can’t reach the server. Connect to the internet to sign in the first time.' };
+  }
+}
+
+/** Ask the server to email a reset link. Response is always generic. */
+export async function requestPasswordReset(email: string): Promise<AuthResult> {
+  if (!EMAIL_RE.test(email.trim().toLowerCase())) {
+    return { ok: false, error: 'Enter a valid email address.' };
+  }
+  try {
+    await api.forgotPassword(email.trim());
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ApiError) return { ok: false, error: err.message };
+    return { ok: false, error: 'Can’t reach the server — try again when online.' };
+  }
+}
+
+/** Confirm an email address from a verification link. */
+export async function confirmEmail(token: string): Promise<AuthResult> {
+  try {
+    await api.verifyEmail(token);
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ApiError) return { ok: false, error: err.message };
+    return { ok: false, error: 'Can’t reach the server — try again when online.' };
+  }
+}
+
+/** Finish a password reset from an emailed link: signs this device in. */
+export async function completeReset(token: string, password: string): Promise<AuthResult> {
+  if (password.length < PASSWORD_MIN) {
+    return { ok: false, error: `Password must be at least ${PASSWORD_MIN} characters.` };
+  }
+  try {
+    const res = await api.resetPassword(token, password);
+    setToken(res.token);
+    await cacheAccount(res.userId, res.name, password, factsOf(res));
+    setSession(res.userId);
+    return { ok: true, userId: res.userId };
+  } catch (err) {
+    if (err instanceof ApiError) return { ok: false, error: err.message };
+    return { ok: false, error: 'Can’t reach the server — try again when online.' };
   }
 }
 

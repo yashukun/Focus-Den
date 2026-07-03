@@ -46,13 +46,15 @@ import { clearState, coerceState, loadState, saveState } from './persist';
 import { play } from '../audio';
 import * as auth from './auth';
 import { api, ApiError, setToken, type RevisionMeta } from './api';
-import { sync } from './sync';
+import { sync, type SyncStatus } from './sync';
 
 export interface SessionInfo {
   userId: string;
   name: string;
   /** the server-designated admin sees testing tools + reset */
   isAdmin: boolean;
+  email: string | null;
+  emailVerified: boolean;
 }
 
 export interface Snapshot {
@@ -61,6 +63,8 @@ export interface Snapshot {
   summary: ShiftSummary | null;
   /** the signed-in profile, or null when the login gate should show */
   session: SessionInfo | null;
+  /** this device's relationship with the server right now */
+  syncStatus: SyncStatus;
 }
 
 /** Fields for a new planner ticket (id/status/createdAt filled by the store). */
@@ -151,8 +155,17 @@ function notifyDurationComplete(t: PlanTicket): void {
 let userId: string | null = null;
 let userName: string | null = null;
 let userIsAdmin = false;
+let userEmail: string | null = null;
+let userEmailVerified = false;
 let state: State = defaultState();
 let summary: ShiftSummary | null = null;
+
+function adoptAccountFacts(account: auth.Account): void {
+  userName = account.name;
+  userIsAdmin = account.isAdmin === true;
+  userEmail = account.email ?? null;
+  userEmailVerified = account.emailVerified === true;
+}
 
 // Resume a persisted session if the account still exists.
 (() => {
@@ -164,8 +177,7 @@ let summary: ShiftSummary | null = null;
     return;
   }
   userId = sid;
-  userName = account.name;
-  userIsAdmin = account.isAdmin === true;
+  adoptAccountFacts(account);
   state = loadState(sid);
 })();
 
@@ -173,7 +185,16 @@ function makeSnapshot(): Snapshot {
   return {
     state,
     summary,
-    session: userId ? { userId, name: userName ?? userId, isAdmin: userIsAdmin } : null,
+    session: userId
+      ? {
+          userId,
+          name: userName ?? userId,
+          isAdmin: userIsAdmin,
+          email: userEmail,
+          emailVerified: userEmailVerified,
+        }
+      : null,
+    syncStatus: sync.getStatus(),
   };
 }
 
@@ -633,12 +654,11 @@ export const store = {
     const account = auth.getAccount(id);
     if (!account) return;
     userId = id;
-    userName = account.name;
-    userIsAdmin = account.isAdmin === true;
+    adoptAccountFacts(account);
     state = loadState(id); // instant local render
     summary = null;
+    sync.authRestored(); // clears any expired flag, then pulls + pushes
     publish();
-    void sync.pullAndReconcile(); // then sync with the server in the background
   },
 
   signOut(): void {
@@ -648,9 +668,96 @@ export const store = {
     userId = null;
     userName = null;
     userIsAdmin = false;
+    userEmail = null;
+    userEmailVerified = false;
     state = defaultState();
     summary = null;
     publish();
+  },
+
+  /**
+   * Re-authenticate in place after the session expired (token aged out or was
+   * revoked). Keeps all local work; pending changes push right after.
+   */
+  async reauthenticate(password: string): Promise<{ ok: boolean; error?: string }> {
+    if (!userId) return { ok: false, error: 'Not signed in.' };
+    const res = await auth.login(userId, password);
+    if (!res.ok) return { ok: false, error: res.error };
+    const account = auth.getAccount(userId);
+    if (account) adoptAccountFacts(account);
+    sync.authRestored();
+    publish();
+    return { ok: true };
+  },
+
+  // ── Account management ──────────────────────────────────────────────────────
+
+  /** Fresh account facts from the server (email/verified/admin); quiet offline. */
+  async refreshAccount(): Promise<void> {
+    if (!userId) return;
+    try {
+      const info = await api.accountInfo();
+      auth.updateAccountFacts(userId, {
+        isAdmin: info.isAdmin,
+        email: info.email,
+        emailVerified: info.emailVerified,
+      });
+      const account = auth.getAccount(userId);
+      if (account) adoptAccountFacts(account);
+      publish();
+    } catch {
+      // offline or expired — the cached facts stay
+    }
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> {
+    if (!userId) return { ok: false, error: 'Not signed in.' };
+    try {
+      const res = await api.changePassword(currentPassword, newPassword);
+      setToken(res.token); // other sessions are dead; this one re-keyed
+      await auth.updateCachedPassword(userId, newPassword);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof ApiError) return { ok: false, error: err.message };
+      return { ok: false, error: 'Can’t reach the server — try again when online.' };
+    }
+  },
+
+  /** Revoke every session everywhere; this device gets a fresh token. */
+  async signOutEverywhere(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await api.logoutAll();
+      setToken(res.token);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof ApiError) return { ok: false, error: err.message };
+      return { ok: false, error: 'Can’t reach the server — try again when online.' };
+    }
+  },
+
+  async changeEmail(password: string, email: string): Promise<{ ok: boolean; error?: string }> {
+    if (!userId) return { ok: false, error: 'Not signed in.' };
+    try {
+      const info = await api.changeEmail(password, email);
+      auth.updateAccountFacts(userId, { email: info.email, emailVerified: info.emailVerified });
+      const account = auth.getAccount(userId);
+      if (account) adoptAccountFacts(account);
+      publish();
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof ApiError) return { ok: false, error: err.message };
+      return { ok: false, error: 'Can’t reach the server — try again when online.' };
+    }
+  },
+
+  async resendVerification(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      await api.resendVerification();
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof ApiError) return { ok: false, error: err.message };
+      return { ok: false, error: 'Can’t reach the server — try again when online.' };
+    }
   },
 
   /**
@@ -676,6 +783,8 @@ export const store = {
     userId = null;
     userName = null;
     userIsAdmin = false;
+    userEmail = null;
+    userEmailVerified = false;
     state = defaultState();
     summary = null;
     publish();
@@ -710,6 +819,7 @@ sync.bindStore({
   getState: () => state,
   getUserId: () => userId,
   adoptRemote: applyRemote,
+  onStatusChange: publish,
 });
 sync.start();
 if (userId) void sync.pullAndReconcile();

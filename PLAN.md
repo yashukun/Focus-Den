@@ -103,9 +103,18 @@ same endpoint.
 - Idle threshold default — 5 min proposed (Phase 2).
 - Hotkey: OS-shortcut only vs. Tauri app (Phase 4).
 
+## Accounts v1 — ✅ completed 2026-07-04 (Tier-2 account layer, pulled forward)
+
+Real accounts ahead of the capture redesign: **email required at signup**
+(verification via AWS SES; console mailer in dev), **login by username or
+email**, **forgot-password** reset links (single-use, 30-min, hashed at rest,
+verified emails only, no enumeration), change password / change email /
+sign-out-everywhere in Settings, a **sync-status dot** in the header, and the
+session-expiry fix (401 keeps local changes and prompts an in-place re-login).
+Accounts are permanent — deletion only by the owner, password-confirmed.
+
 ## Later / unscheduled
 
-- `Meeting` state; configurable shift length & schedule; sync-status
-  indicator in header; PWA (manifest + service worker); per-event server sync
-  (true multi-device merge); Level 2/3 multi-user hardening (email accounts,
-  server-authoritative rules) per the tier plan.
+- `Meeting` state; configurable shift length & schedule; PWA (manifest +
+  service worker); per-event server sync (true multi-device merge); Level 3
+  server-authoritative rules per the tier plan.
