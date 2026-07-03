@@ -33,6 +33,11 @@ if [ -n "$ADMIN_NAME" ] && ! sudo grep -q '^ADMIN_USER=' /etc/focus-den/env; the
   echo "ADMIN_USER=$(printf '%s' "$ADMIN_NAME" | tr '[:upper:]' '[:lower:]')" | sudo tee -a /etc/focus-den/env >/dev/null
 fi
 
+# Email links (verification / password reset) must point at the public URL.
+if ! sudo grep -q '^APP_URL=' /etc/focus-den/env; then
+  echo "APP_URL=https://$DOMAIN" | sudo tee -a /etc/focus-den/env >/dev/null
+fi
+
 echo "==> Building the app image"
 sudo docker build -t focus-den .
 
