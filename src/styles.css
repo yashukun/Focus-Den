@@ -1011,6 +1011,61 @@ p { margin: 0; }
 .setting-row:last-child { margin-bottom: 0; }
 .setting-msg { margin-top: 0.6rem; }
 
+/* ── Settings · Account card ─────────────────────────────────────────────── */
+
+.account-rows { margin: 0.1rem 0 0.9rem; }
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0;
+}
+.account-row + .account-row { border-top: 1px solid var(--line); }
+.account-label {
+  flex: 0 0 96px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.account-value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.account-value strong { color: var(--ink); }
+.account-row-action { flex: none; }
+
+.badge {
+  font-size: 0.72rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.badge-ok {
+  background: color-mix(in srgb, #5fae62 14%, var(--panel));
+  border-color: color-mix(in srgb, #5fae62 40%, transparent);
+}
+.badge-warn {
+  background: color-mix(in srgb, #d9a23c 16%, var(--panel));
+  border-color: color-mix(in srgb, #d9a23c 45%, transparent);
+}
+
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.85rem;
+}
+.account-footnote { margin-top: 0.7rem; font-size: 0.82rem; }
+
 /* ── Accounts v1: login extras, sync status, session banners ─────────────── */
 
 .password-row { display: flex; gap: 0.4rem; align-items: center; }

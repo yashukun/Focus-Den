@@ -141,40 +141,64 @@ export function Settings({ state, session }: SettingsProps) {
 
       <section className="card">
         <div className="card-head"><h2>Account</h2></div>
-        <p className="muted">
-          Signed in as <strong style={{ color: 'var(--ink)' }}>{session.name}</strong> · changes save
-          on this device instantly and sync to your server.
-        </p>
-        <p className="muted">
-          Email:{' '}
-          {session.email ? (
-            <>
-              <strong style={{ color: 'var(--ink)' }}>{session.email}</strong>{' '}
-              {session.emailVerified ? (
-                <span title="Verified — password recovery is available">✓ verified</span>
-              ) : (
+
+        <div className="account-rows">
+          <div className="account-row">
+            <span className="account-label">Signed in as</span>
+            <span className="account-value">
+              <strong>{session.name}</strong>
+              {session.isAdmin && <span className="badge badge-ok">admin</span>}
+            </span>
+          </div>
+
+          <div className="account-row">
+            <span className="account-label">Email</span>
+            <span className="account-value">
+              {session.email ? (
                 <>
-                  <span title="Unverified — password recovery won’t work yet">⚠ not verified</span>{' '}
-                  <button className="btn btn-sm" onClick={() => void resendVerification()}>Resend link</button>
+                  <strong>{session.email}</strong>
+                  {session.emailVerified ? (
+                    <span className="badge badge-ok" title="Verified — password recovery is available">
+                      ✓ verified
+                    </span>
+                  ) : (
+                    <span className="badge badge-warn" title="Unverified — password recovery won’t work yet">
+                      not verified
+                    </span>
+                  )}
                 </>
+              ) : (
+                <em className="muted">none yet — needed for password recovery</em>
               )}
-            </>
-          ) : (
-            <>
-              <em>none yet</em> — add one to enable password recovery{' '}
-              <button className="btn btn-sm" onClick={() => void changeEmail()}>Add email</button>
-            </>
-          )}
-        </p>
-        <div className="manage-row">
-          <button className="btn btn-sm" onClick={() => void changePassword()}>Change password</button>
-          {session.email && (
-            <button className="btn btn-sm" onClick={() => void changeEmail()}>Change email</button>
-          )}
-          <button className="btn btn-sm" onClick={() => void signOutEverywhere()}>Sign out everywhere</button>
-          <button className="btn btn-sm" onClick={() => store.signOut()}>Sign out</button>
-          <button className="btn btn-sm" onClick={() => void deleteProfile()}>Delete profile</button>
+            </span>
+            <span className="account-row-action">
+              {session.email && !session.emailVerified && (
+                <button className="btn btn-sm" onClick={() => void resendVerification()}>Resend link</button>
+              )}
+              {!session.email && (
+                <button className="btn btn-sm" onClick={() => void changeEmail()}>Add email</button>
+              )}
+            </span>
+          </div>
         </div>
+
+        <div className="account-actions">
+          <div className="manage-row">
+            <button className="btn btn-sm" onClick={() => void changePassword()}>Change password</button>
+            {session.email && (
+              <button className="btn btn-sm" onClick={() => void changeEmail()}>Change email</button>
+            )}
+            <button className="btn btn-sm" onClick={() => void signOutEverywhere()}>Sign out everywhere</button>
+          </div>
+          <div className="manage-row">
+            <button className="btn btn-sm" onClick={() => store.signOut()}>Sign out</button>
+            <button className="btn btn-sm btn-danger" onClick={() => void deleteProfile()}>Delete profile</button>
+          </div>
+        </div>
+
+        <p className="muted account-footnote">
+          Changes save on this device instantly and sync to your server.
+        </p>
       </section>
 
       <section className="card">
