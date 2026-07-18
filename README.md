@@ -82,7 +82,7 @@ the server: `./deploy/aws-setup.sh focus.yourdomain.com` (idempotent; also how
 you update). Runs on any Docker host:
 
 ```bash
-docker build -t focus-den .
+docker build --build-arg GIT_SHA="$(git rev-parse --short HEAD)" -t focus-den .
 docker run -d --name focus-den --restart unless-stopped \
   -p 127.0.0.1:8787:8787 -v focus-den-data:/data \
   -e JWT_SECRET="$(openssl rand -hex 32)" focus-den
@@ -96,8 +96,9 @@ focus.example.com {
 }
 ```
 
-Update a running deploy with `git pull && docker build -t focus-den . &&
-docker restart focus-den` — user data lives on the `focus-den-data` volume and
+Update a running deploy with `git pull`, rebuild the image (build command
+above), then `docker rm -f focus-den` and re-run the `docker run` command —
+user data lives on the `focus-den-data` volume and
 survives rebuilds. For off-box backups, enable your host's disk snapshots
 and/or stream the SQLite file to any S3-compatible bucket with **Litestream**
 — see `server/litestream.yml.example`.

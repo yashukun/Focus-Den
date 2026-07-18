@@ -1,6 +1,10 @@
 # ── Stage 1: build the frontend ─────────────────────────────────────────────
 FROM node:24-alpine AS build
 WORKDIR /app
+# .git is dockerignored, so the UI's version stamp can't read the commit hash
+# itself — pass it in: docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD)
+ARG GIT_SHA
+ENV GIT_SHA=$GIT_SHA
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./

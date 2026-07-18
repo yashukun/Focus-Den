@@ -353,6 +353,8 @@ export function Settings({ state, session }: SettingsProps) {
           <button className="btn btn-danger btn-block" onClick={resetAll}>Reset everything</button>
         </section>
       )}
+
+      <p className="app-version settings-version">Focus Den {__APP_VERSION__}</p>
     </div>
   );
 }

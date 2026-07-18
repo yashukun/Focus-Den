@@ -202,6 +202,7 @@ export function Login() {
           anywhere else.
         </p>
       </div>
+      <span className="app-version">{__APP_VERSION__}</span>
     </div>
   );
 }

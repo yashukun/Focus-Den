@@ -1297,6 +1297,24 @@ p { margin: 0; }
 }
 .login-note { text-align: center; margin-top: 1rem; font-size: 0.78rem; }
 
+/* ── Version stamp (login corner + Settings footer) ──────────────────────── */
+
+.app-version {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  opacity: 0.8;
+  user-select: none;
+}
+.login-screen .app-version {
+  position: fixed;
+  right: 0.85rem;
+  bottom: 0.65rem;
+}
+.settings-version {
+  text-align: right;
+  margin-top: 1rem;
+}
+
 /* ── Header account chip ─────────────────────────────────────────────────── */
 
 .header-user {

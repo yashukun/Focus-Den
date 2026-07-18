@@ -39,7 +39,7 @@ if ! sudo grep -q '^APP_URL=' /etc/focus-den/env; then
 fi
 
 echo "==> Building the app image"
-sudo docker build -t focus-den .
+sudo docker build --build-arg GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)" -t focus-den .
 
 echo "==> (Re)starting the container (data lives on the focus-den-data volume)"
 sudo docker rm -f focus-den >/dev/null 2>&1 || true
