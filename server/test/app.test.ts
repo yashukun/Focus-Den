@@ -285,4 +285,31 @@ describe.each(ENGINES)('backend API (%s store)', (_engine, makeStore) => {
     expect(inbox[inbox.length - 1].to).toBe('new@t.dev');
     expect((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { identifier: 'new@t.dev', password: 'newpass9999' } })).statusCode).toBe(200);
   });
+
+  it('resend-verification: a failing mailer yields one clean 502', async () => {
+    const brokenMailer = { send: async () => { throw new Error('smtp down'); } };
+    const app = await buildApp(makeStore(), 'test-secret', { mailer: brokenMailer });
+    // Signup still succeeds — its verification mail is best-effort.
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Mailless', email: 'ml@t.dev', password: 'pass1234' } });
+    expect(su.statusCode).toBe(200);
+    const auth = { authorization: `Bearer ${su.json().token}` };
+
+    const res = await app.inject({ method: 'POST', url: '/api/account/resend-verification', headers: auth });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toMatch(/could not send/i);
+  });
+
+  it('rate-limits account deletion — no faster password-guessing oracle than login', async () => {
+    const app = await makeApp();
+    const su = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { name: 'Del', email: 'del@t.dev', password: 'pass1234' } });
+    const auth = { authorization: `Bearer ${su.json().token}` };
+
+    let limited = 0;
+    for (let i = 0; i < 12; i++) {
+      const res = await app.inject({ method: 'DELETE', url: '/api/account', headers: auth, payload: { password: `wrong-${i}` } });
+      if (res.statusCode === 429) limited++;
+      else expect(res.statusCode).toBe(401);
+    }
+    expect(limited).toBeGreaterThan(0); // budget is 10/min → attempts 11+ get 429
+  });
 });

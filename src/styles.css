@@ -1096,6 +1096,7 @@ p { margin: 0; }
 .sync-pending { background: #d9a23c; }
 .sync-offline { background: var(--ink-soft); opacity: 0.5; }
 .sync-expired { background: #d05a5a; box-shadow: 0 0 0 3px color-mix(in srgb, #d05a5a 25%, transparent); }
+.sync-incompatible { background: #d05a5a; box-shadow: 0 0 0 3px color-mix(in srgb, #d05a5a 25%, transparent); }
 
 .expired-bar {
   display: flex;

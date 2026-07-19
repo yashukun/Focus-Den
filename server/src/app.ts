@@ -339,7 +339,7 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
   );
 
   // Sign out everywhere: revoke all sessions, re-issue only this device's.
-  app.post('/api/account/logout-all', { preHandler: requireAuth }, async (req: AuthedRequest) => {
+  app.post('/api/account/logout-all', { preHandler: requireAuth, config: { rateLimit: AUTH_RATE } }, async (req: AuthedRequest) => {
     const user = store.getUser(req.userId!)!;
     const tv = (user.tokenVersion ?? 1) + 1;
     store.createUser({ ...user, tokenVersion: tv });
@@ -378,17 +378,21 @@ export async function buildApp(store: StateStore, secret: string, opts: AppOptio
       const user = store.getUser(req.userId!)!;
       if (!user.email) return reply.code(400).send({ error: 'No email on this account yet.' });
       if (user.emailVerified) return { ok: true }; // nothing to do
-      await sendVerification(user).catch((err) => {
+      try {
+        await sendVerification(user);
+      } catch (err) {
         console.error('[focus-den] verification mail failed:', err);
         return reply.code(502).send({ error: 'Could not send the email — try again shortly.' });
-      });
+      }
       return { ok: true };
     },
   );
 
   // Deleting an account destroys its state and every backup revision — a
   // stolen bearer token alone must not be enough, so the password is required.
-  app.delete('/api/account', { preHandler: requireAuth }, async (req: AuthedRequest, reply) => {
+  // Strict rate limit: this route verifies passwords, so it must not be a
+  // faster guessing oracle than login.
+  app.delete('/api/account', { preHandler: requireAuth, config: { rateLimit: AUTH_RATE } }, async (req: AuthedRequest, reply) => {
     const { password } = (req.body ?? {}) as { password?: string };
     const user = store.getUser(req.userId!)!;
     if (!password || !verifyPassword(password, user.salt, user.hash)) {

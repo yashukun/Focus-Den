@@ -44,6 +44,8 @@ const SYNC_LABELS = {
   pending: 'Saving to your server…',
   offline: 'Offline — changes saved on this device, will sync later',
   expired: 'Session expired — sign in to resume syncing',
+  incompatible:
+    'This device runs an outdated app version — reload the page to update and resume syncing',
 } as const;
 
 /** Inline re-login: keeps all local work, resumes syncing on success. */
@@ -163,10 +165,10 @@ export default function App() {
 
   const appearance = resolvedAppearance(settings.theme, settings.appearance);
 
+  // Only meaningful on Cozy — Midnight/Sunrise are fixed palettes, so the
+  // header toggle is hidden for them (Settings disables appearance the same way).
   function toggleTheme() {
-    const next = appearance === 'dark' ? 'light' : 'dark';
-    store.setTheme('cozy');
-    store.setAppearance(next);
+    store.setAppearance(appearance === 'dark' ? 'light' : 'dark');
   }
 
   function toggleSound() {
@@ -212,15 +214,17 @@ export default function App() {
           <span className="header-balance mono tone-points" title="Points balance">
             ◈ {state.points}
           </span>
-          <button
-            className="btn btn-ghost btn-icon"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${appearance === 'dark' ? 'light' : 'dark'} mode`}
-            title="Toggle light / dark"
-            data-sound="none"
-          >
-            {appearance === 'dark' ? '☀' : '🌙'}
-          </button>
+          {settings.theme === 'cozy' && (
+            <button
+              className="btn btn-ghost btn-icon"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${appearance === 'dark' ? 'light' : 'dark'} mode`}
+              title="Toggle light / dark"
+              data-sound="none"
+            >
+              {appearance === 'dark' ? '☀' : '🌙'}
+            </button>
+          )}
           <button
             className="btn btn-ghost btn-icon"
             onClick={toggleSound}

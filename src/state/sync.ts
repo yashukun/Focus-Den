@@ -18,7 +18,7 @@
  * a circular import.
  */
 
-import { coerceState, defaultState, type State } from '../core';
+import { coerceState, type State } from '../core';
 import { api, ApiError, getToken } from './api';
 
 /** Pure last-write-wins choice by edit time. Exported for tests. */
@@ -47,7 +47,7 @@ interface StoreHooks {
 }
 
 /** What the header shows about this device's relationship with the server. */
-export type SyncStatus = 'synced' | 'pending' | 'offline' | 'expired';
+export type SyncStatus = 'synced' | 'pending' | 'offline' | 'expired' | 'incompatible';
 
 const DEBOUNCE_MS = 1200;
 const metaKey = (userId: string) => `focus-den/sync/${userId}`;
@@ -119,6 +119,14 @@ let flushing = false;
 let started = false;
 /** Set when the server rejected our token (expired/revoked) — needs re-login. */
 let authExpired = false;
+/**
+ * Set when the server doc doesn't coerce — it was written by a NEWER app
+ * version than this one. Adopting the empty default would wipe the account on
+ * every device, and pushing local would clobber the newer data, so sync
+ * freezes both ways until this client is updated (or the server doc becomes
+ * readable again, e.g. via a backup restore).
+ */
+let incompatible = false;
 
 function online(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine;
@@ -137,7 +145,7 @@ function schedule(): void {
 }
 
 async function flush(): Promise<void> {
-  if (!hooks || flushing) return;
+  if (!hooks || flushing || incompatible) return;
   const userId = hooks.getUserId();
   if (!userId || !getToken() || !online() || !dirty) return;
 
@@ -154,7 +162,12 @@ async function flush(): Promise<void> {
       dirty = false;
     } else if (res.serverDoc) {
       // Another device wrote something newer — adopt it.
-      hooks.adoptRemote(coerceState(res.serverDoc) ?? defaultState());
+      const serverState = coerceState(res.serverDoc);
+      if (!serverState) {
+        incompatible = true; // newer app version — see the flag's doc comment
+        return;
+      }
+      hooks.adoptRemote(serverState);
       writeMeta(userId, { updatedAt: res.updatedAt, rev: res.rev });
       dirty = false;
     }
@@ -167,7 +180,7 @@ async function flush(): Promise<void> {
     // network errors: keep dirty, retry on reconnect
   } finally {
     flushing = false;
-    if (dirty && !authExpired) schedule(); // changed mid-flight (or retry pending)
+    if (dirty && !authExpired && !incompatible) schedule(); // changed mid-flight (or retry pending)
     notifyStatus();
   }
 }
@@ -198,6 +211,7 @@ export const sync = {
   /** What to show in the header. */
   getStatus(): SyncStatus {
     if (authExpired) return 'expired';
+    if (incompatible) return 'incompatible';
     if (!online()) return 'offline';
     if (dirty || flushing) return 'pending';
     return 'synced';
@@ -236,9 +250,16 @@ export const sync = {
     } catch {
       return; // offline / error → keep local
     }
+    const remoteState = coerceState(remote.doc);
+    if (!remoteState) {
+      incompatible = true; // newer app version — see the flag's doc comment
+      notifyStatus();
+      return;
+    }
+    incompatible = false; // the server doc is readable again
     const meta = readMeta(userId);
     if (pickNewer(meta.updatedAt, remote.updatedAt) === 'server') {
-      hooks.adoptRemote(coerceState(remote.doc) ?? defaultState());
+      hooks.adoptRemote(remoteState);
       writeMeta(userId, { updatedAt: remote.updatedAt, rev: remote.rev });
       dirty = false;
     } else {
@@ -256,5 +277,6 @@ export const sync = {
     }
     dirty = false;
     authExpired = false;
+    incompatible = false;
   },
 };

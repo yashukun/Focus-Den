@@ -30,6 +30,8 @@ export class SqliteStore implements StateStore {
     this.db = new DatabaseSync(filePath);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS users (
         id            TEXT PRIMARY KEY,
         name          TEXT NOT NULL,
@@ -146,24 +148,33 @@ export class SqliteStore implements StateStore {
   }
 
   putState(userId: string, doc: string, rev: number, updatedAt: number): StateRow {
-    this.db
-      .prepare(
-        `INSERT INTO states (userId, doc, rev, updatedAt) VALUES (?, ?, ?, ?)
-         ON CONFLICT(userId) DO UPDATE SET doc = excluded.doc, rev = excluded.rev, updatedAt = excluded.updatedAt`,
-      )
-      .run(userId, doc, rev, updatedAt);
-    this.db
-      .prepare(
-        `INSERT INTO revisions (userId, rev, doc, updatedAt, storedAt) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(userId, rev) DO UPDATE SET doc = excluded.doc, updatedAt = excluded.updatedAt, storedAt = excluded.storedAt`,
-      )
-      .run(userId, rev, doc, updatedAt, Date.now());
-    this.db
-      .prepare(
-        `DELETE FROM revisions WHERE userId = ?
-         AND rev NOT IN (SELECT rev FROM revisions WHERE userId = ? ORDER BY rev DESC LIMIT ?)`,
-      )
-      .run(userId, userId, MAX_REVISIONS);
+    // One transaction: the state row, its revision, and the prune land (or
+    // roll back) together — a crash can't leave a state without its revision.
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO states (userId, doc, rev, updatedAt) VALUES (?, ?, ?, ?)
+           ON CONFLICT(userId) DO UPDATE SET doc = excluded.doc, rev = excluded.rev, updatedAt = excluded.updatedAt`,
+        )
+        .run(userId, doc, rev, updatedAt);
+      this.db
+        .prepare(
+          `INSERT INTO revisions (userId, rev, doc, updatedAt, storedAt) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(userId, rev) DO UPDATE SET doc = excluded.doc, updatedAt = excluded.updatedAt, storedAt = excluded.storedAt`,
+        )
+        .run(userId, rev, doc, updatedAt, Date.now());
+      this.db
+        .prepare(
+          `DELETE FROM revisions WHERE userId = ?
+           AND rev NOT IN (SELECT rev FROM revisions WHERE userId = ? ORDER BY rev DESC LIMIT ?)`,
+        )
+        .run(userId, userId, MAX_REVISIONS);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
     return { doc, rev, updatedAt };
   }
 
