@@ -53,8 +53,6 @@ export interface SessionInfo {
   name: string;
   /** the server-designated admin sees testing tools + reset */
   isAdmin: boolean;
-  email: string | null;
-  emailVerified: boolean;
 }
 
 export interface Snapshot {
@@ -155,16 +153,12 @@ function notifyDurationComplete(t: PlanTicket): void {
 let userId: string | null = null;
 let userName: string | null = null;
 let userIsAdmin = false;
-let userEmail: string | null = null;
-let userEmailVerified = false;
 let state: State = defaultState();
 let summary: ShiftSummary | null = null;
 
 function adoptAccountFacts(account: auth.Account): void {
   userName = account.name;
   userIsAdmin = account.isAdmin === true;
-  userEmail = account.email ?? null;
-  userEmailVerified = account.emailVerified === true;
 }
 
 // Resume a persisted session if the account still exists.
@@ -190,8 +184,6 @@ function makeSnapshot(): Snapshot {
           userId,
           name: userName ?? userId,
           isAdmin: userIsAdmin,
-          email: userEmail,
-          emailVerified: userEmailVerified,
         }
       : null,
     syncStatus: sync.getStatus(),
@@ -668,8 +660,6 @@ export const store = {
     userId = null;
     userName = null;
     userIsAdmin = false;
-    userEmail = null;
-    userEmailVerified = false;
     state = defaultState();
     summary = null;
     publish();
@@ -692,16 +682,12 @@ export const store = {
 
   // ── Account management ──────────────────────────────────────────────────────
 
-  /** Fresh account facts from the server (email/verified/admin); quiet offline. */
+  /** Fresh account facts from the server (admin); quiet offline. */
   async refreshAccount(): Promise<void> {
     if (!userId) return;
     try {
       const info = await api.accountInfo();
-      auth.updateAccountFacts(userId, {
-        isAdmin: info.isAdmin,
-        email: info.email,
-        emailVerified: info.emailVerified,
-      });
+      auth.updateAccountFacts(userId, { isAdmin: info.isAdmin });
       const account = auth.getAccount(userId);
       if (account) adoptAccountFacts(account);
       publish();
@@ -735,31 +721,6 @@ export const store = {
     }
   },
 
-  async changeEmail(password: string, email: string): Promise<{ ok: boolean; error?: string }> {
-    if (!userId) return { ok: false, error: 'Not signed in.' };
-    try {
-      const info = await api.changeEmail(password, email);
-      auth.updateAccountFacts(userId, { email: info.email, emailVerified: info.emailVerified });
-      const account = auth.getAccount(userId);
-      if (account) adoptAccountFacts(account);
-      publish();
-      return { ok: true };
-    } catch (err) {
-      if (err instanceof ApiError) return { ok: false, error: err.message };
-      return { ok: false, error: 'Can’t reach the server — try again when online.' };
-    }
-  },
-
-  async resendVerification(): Promise<{ ok: boolean; error?: string }> {
-    try {
-      await api.resendVerification();
-      return { ok: true };
-    } catch (err) {
-      if (err instanceof ApiError) return { ok: false, error: err.message };
-      return { ok: false, error: 'Can’t reach the server — try again when online.' };
-    }
-  },
-
   /**
    * Delete the signed-in profile (server + local) and end the session.
    * Destructive and irreversible, so the server confirms the password first —
@@ -783,8 +744,6 @@ export const store = {
     userId = null;
     userName = null;
     userIsAdmin = false;
-    userEmail = null;
-    userEmailVerified = false;
     state = defaultState();
     summary = null;
     publish();

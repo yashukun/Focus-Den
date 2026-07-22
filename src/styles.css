@@ -1039,7 +1039,6 @@ p { margin: 0; }
   overflow-wrap: anywhere;
 }
 .account-value strong { color: var(--ink); }
-.account-row-action { flex: none; }
 
 .badge {
   font-size: 0.72rem;
@@ -1051,10 +1050,6 @@ p { margin: 0; }
 .badge-ok {
   background: color-mix(in srgb, #5fae62 14%, var(--panel));
   border-color: color-mix(in srgb, #5fae62 40%, transparent);
-}
-.badge-warn {
-  background: color-mix(in srgb, #d9a23c 16%, var(--panel));
-  border-color: color-mix(in srgb, #d9a23c 45%, transparent);
 }
 
 .account-actions {
@@ -1111,15 +1106,6 @@ p { margin: 0; }
   font-size: 0.9rem;
 }
 .expired-bar .input { max-width: 180px; padding: 0.35rem 0.6rem; }
-
-.verify-banner {
-  margin: 0.6rem 0.9rem 0;
-  padding: 0.5rem 0.9rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, #5fae62 14%, var(--panel));
-  border: 1px solid color-mix(in srgb, #5fae62 35%, var(--line));
-  font-size: 0.9rem;
-}
 
 .backup-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
 .backup-row {

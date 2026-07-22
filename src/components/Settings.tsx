@@ -57,7 +57,7 @@ export function Settings({ state, session }: SettingsProps) {
     if (ok) void loadBackups();
   }
 
-  // Show fresh account facts (email verified? changed elsewhere?) when opening.
+  // Show fresh account facts (admin status changed?) when opening.
   useEffect(() => {
     void store.refreshAccount();
   }, []);
@@ -80,24 +80,10 @@ export function Settings({ state, session }: SettingsProps) {
     setMsg(result.ok ? 'Password changed ✓ — every other device was signed out.' : result.error ?? 'Failed.');
   }
 
-  async function changeEmail() {
-    const password = window.prompt('Your password:');
-    if (!password) return;
-    const email = window.prompt('New email address:');
-    if (!email) return;
-    const result = await store.changeEmail(password, email);
-    setMsg(result.ok ? 'Email updated — check your inbox for the verification link.' : result.error ?? 'Failed.');
-  }
-
   async function signOutEverywhere() {
     if (!window.confirm('Sign out on every device? (This one stays signed in.)')) return;
     const result = await store.signOutEverywhere();
     setMsg(result.ok ? 'All other sessions signed out ✓' : result.error ?? 'Failed.');
-  }
-
-  async function resendVerification() {
-    const result = await store.resendVerification();
-    setMsg(result.ok ? 'Verification email sent — check your inbox.' : result.error ?? 'Failed.');
   }
 
   function downloadBackup() {
@@ -151,43 +137,11 @@ export function Settings({ state, session }: SettingsProps) {
             </span>
           </div>
 
-          <div className="account-row">
-            <span className="account-label">Email</span>
-            <span className="account-value">
-              {session.email ? (
-                <>
-                  <strong>{session.email}</strong>
-                  {session.emailVerified ? (
-                    <span className="badge badge-ok" title="Verified — password recovery is available">
-                      ✓ verified
-                    </span>
-                  ) : (
-                    <span className="badge badge-warn" title="Unverified — password recovery won’t work yet">
-                      not verified
-                    </span>
-                  )}
-                </>
-              ) : (
-                <em className="muted">none yet — needed for password recovery</em>
-              )}
-            </span>
-            <span className="account-row-action">
-              {session.email && !session.emailVerified && (
-                <button className="btn btn-sm" onClick={() => void resendVerification()}>Resend link</button>
-              )}
-              {!session.email && (
-                <button className="btn btn-sm" onClick={() => void changeEmail()}>Add email</button>
-              )}
-            </span>
-          </div>
         </div>
 
         <div className="account-actions">
           <div className="manage-row">
             <button className="btn btn-sm" onClick={() => void changePassword()}>Change password</button>
-            {session.email && (
-              <button className="btn btn-sm" onClick={() => void changeEmail()}>Change email</button>
-            )}
             <button className="btn btn-sm" onClick={() => void signOutEverywhere()}>Sign out everywhere</button>
           </div>
           <div className="manage-row">

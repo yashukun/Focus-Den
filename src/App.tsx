@@ -9,7 +9,6 @@ import { useEffect, useRef, useState } from 'react';
 import { isActive } from './core';
 import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume } from './audio';
 import { useNow, useStore } from './state/hooks';
-import { confirmEmail } from './state/auth';
 import { store } from './state/store';
 import { Dashboard } from './components/Dashboard';
 import { RoomView } from './components/RoomView';
@@ -20,24 +19,10 @@ import { SummaryModal } from './components/SummaryModal';
 import { DeepWork } from './components/DeepWork';
 import { Onboarding } from './components/Onboarding';
 import { Login } from './components/Login';
-import { ResetPassword } from './components/ResetPassword';
 import { STATUS_META } from './components/statusMeta';
 import { applyTheme, resolvedAppearance } from './theme';
 
 type Tab = 'dashboard' | 'plan' | 'room' | 'history' | 'settings';
-
-/** Tokens arriving via email links (/?reset=… or /?verify=…), captured once. */
-function takeUrlToken(param: 'reset' | 'verify'): string | null {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  const value = params.get(param);
-  if (value) {
-    params.delete(param);
-    const rest = params.toString();
-    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
-  }
-  return value;
-}
 
 const SYNC_LABELS = {
   synced: 'Synced with your server',
@@ -97,21 +82,8 @@ export default function App() {
   const { state, summary, session, syncStatus } = useStore();
   const [tab, setTab] = useState<Tab>('dashboard');
   const [soundOn, setSoundOn] = useState(() => !isMuted());
-  const [resetToken, setResetToken] = useState<string | null>(() => takeUrlToken('reset'));
-  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
 
   const { settings, perks } = state;
-
-  // Handle an email-verification link (works signed in or out).
-  useEffect(() => {
-    const token = takeUrlToken('verify');
-    if (!token) return;
-    void confirmEmail(token).then((res) => {
-      setVerifyMsg(res.ok ? 'Email verified ✓' : res.error ?? 'Verification failed.');
-      if (res.ok) void store.refreshAccount();
-      window.setTimeout(() => setVerifyMsg(null), 6000);
-    });
-  }, []);
 
   // Apply the active theme + appearance.
   useEffect(() => {
@@ -159,8 +131,6 @@ export default function App() {
   }, [state.shift.clean]);
 
   // Auth gate — all hooks above run unconditionally so order stays stable.
-  // A reset link takes precedence over everything (it must work signed out).
-  if (resetToken) return <ResetPassword token={resetToken} onDone={() => setResetToken(null)} />;
   if (!session) return <Login />;
 
   const appearance = resolvedAppearance(settings.theme, settings.appearance);
@@ -239,7 +209,6 @@ export default function App() {
       </header>
 
       {syncStatus === 'expired' && <SessionExpiredBar />}
-      {verifyMsg && <div className="verify-banner">{verifyMsg}</div>}
 
       <nav className="tabbar" aria-label="Primary">
         {TABS.map((t) => (

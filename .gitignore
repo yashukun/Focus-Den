@@ -18,13 +18,21 @@ server/data
 # real Litestream config holds S3 credentials (the .example is safe to commit)
 server/litestream.yml
 
+# Local-only ops: SSH key dir, prod DB snapshots and the script that pulls them
+IGNORE/
+CLAUDE.md
+focus-den-remote.db
+pull-db.py
+docs/DEPLOY-AWS.md
+docs/EMAIL-SETUP.md
+docs/DEVELOPMENT.md
 # Editor
 .vscode/*
 !.vscode/extensions.json
+*.sln
 .idea
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?

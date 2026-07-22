@@ -1,5 +1,4 @@
 import { buildApp } from './app';
-import { makeMailer } from './email';
 import { env, legacyJsonDbPath } from './env';
 import { makeStore } from './store-factory';
 
@@ -9,8 +8,6 @@ const app = await buildApp(store, env.jwtSecret, {
   trustProxy: env.trustProxy,
   corsOrigin: env.corsOrigin,
   adminUser: env.adminUser,
-  mailer: makeMailer(env),
-  appUrl: env.appUrl,
 });
 
 // Exit promptly and cleanly on Ctrl+C / tsx-watch restarts / docker stop —

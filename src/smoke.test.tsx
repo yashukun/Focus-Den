@@ -140,7 +140,7 @@ describe('render smoke', () => {
       perks: { ...idleState().perks, soundscape: true, themeMidnight: true, deepWork: true },
     };
     const settings = renderToString(
-      <Settings state={s} session={{ userId: 'sam', name: 'Sam', isAdmin: true, email: 'sam@t.dev', emailVerified: true }} />,
+      <Settings state={s} session={{ userId: 'sam', name: 'Sam', isAdmin: true }} />,
     );
     expect(settings).toContain('Settings');
     expect(settings).toContain('Sign out');

@@ -68,15 +68,11 @@ export interface AuthResponse {
   name: string;
   /** whether this account is the server's designated admin */
   isAdmin?: boolean;
-  email?: string | null;
-  emailVerified?: boolean;
 }
 
 export interface AccountView {
   userId: string;
   name: string;
-  email: string | null;
-  emailVerified: boolean;
   isAdmin: boolean;
 }
 
@@ -101,16 +97,10 @@ export interface RevisionMeta {
 }
 
 export const api = {
-  signup: (name: string, email: string, password: string) =>
-    req<AuthResponse>('/auth/signup', { method: 'POST', body: { name, email, password } }),
+  signup: (name: string, password: string) =>
+    req<AuthResponse>('/auth/signup', { method: 'POST', body: { name, password } }),
   login: (identifier: string, password: string) =>
     req<AuthResponse>('/auth/login', { method: 'POST', body: { identifier, password } }),
-  forgotPassword: (email: string) =>
-    req<{ ok: boolean }>('/auth/forgot', { method: 'POST', body: { email } }),
-  resetPassword: (token: string, password: string) =>
-    req<AuthResponse>('/auth/reset', { method: 'POST', body: { token, password } }),
-  verifyEmail: (token: string) =>
-    req<{ ok: boolean; name?: string }>('/auth/verify', { method: 'POST', body: { token } }),
   accountInfo: () => req<AccountView>('/account', { auth: true }),
   changePassword: (currentPassword: string, newPassword: string) =>
     req<{ ok: boolean; token: string }>('/account/password', {
@@ -119,10 +109,6 @@ export const api = {
       body: { currentPassword, newPassword },
     }),
   logoutAll: () => req<{ ok: boolean; token: string }>('/account/logout-all', { method: 'POST', auth: true }),
-  changeEmail: (password: string, email: string) =>
-    req<AccountView>('/account/email', { method: 'POST', auth: true, body: { password, email } }),
-  resendVerification: () =>
-    req<{ ok: boolean }>('/account/resend-verification', { method: 'POST', auth: true }),
   getState: () => req<StateResponse>('/state', { auth: true }),
   putState: (doc: State, updatedAt: number) =>
     req<PutResponse>('/state', { method: 'PUT', auth: true, body: { doc, updatedAt } }),

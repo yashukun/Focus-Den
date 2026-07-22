@@ -10,7 +10,6 @@ import { dirname } from 'node:path';
 import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
 import {
   MAX_REVISIONS,
-  type EmailTokenRow,
   type RevisionMeta,
   type StateRow,
   type StateStore,
@@ -38,15 +37,7 @@ export class SqliteStore implements StateStore {
         salt          TEXT NOT NULL,
         hash          TEXT NOT NULL,
         createdAt     INTEGER NOT NULL,
-        tokenVersion  INTEGER NOT NULL DEFAULT 1,
-        email         TEXT,
-        emailVerified INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS email_tokens (
-        tokenHash TEXT PRIMARY KEY,
-        userId    TEXT NOT NULL,
-        kind      TEXT NOT NULL,
-        expiresAt INTEGER NOT NULL
+        tokenVersion  INTEGER NOT NULL DEFAULT 1
       );
       CREATE TABLE IF NOT EXISTS states (
         userId    TEXT PRIMARY KEY,
@@ -63,82 +54,38 @@ export class SqliteStore implements StateStore {
         PRIMARY KEY (userId, rev)
       );
     `);
-    // Databases created before these columns existed migrate in place.
-    for (const ddl of [
-      'ALTER TABLE users ADD COLUMN tokenVersion INTEGER NOT NULL DEFAULT 1',
-      'ALTER TABLE users ADD COLUMN email TEXT',
-      'ALTER TABLE users ADD COLUMN emailVerified INTEGER NOT NULL DEFAULT 0',
-    ]) {
-      try {
-        this.db.exec(ddl);
-      } catch {
-        // column already exists
-      }
+    // Databases created before this column existed migrate in place. (Databases
+    // from the removed email flows may also carry email columns and an
+    // email_tokens table — both are simply ignored.)
+    try {
+      this.db.exec('ALTER TABLE users ADD COLUMN tokenVersion INTEGER NOT NULL DEFAULT 1');
+    } catch {
+      // column already exists
     }
-    this.db.exec(
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL',
-    );
-  }
-
-  private rowToUser(row: Record<string, unknown> | undefined): UserRow | undefined {
-    if (!row) return undefined;
-    const user = row as unknown as Omit<UserRow, 'email' | 'emailVerified'> & {
-      email: string | null;
-      emailVerified: number;
-    };
-    return {
-      id: user.id,
-      name: user.name,
-      salt: user.salt,
-      hash: user.hash,
-      createdAt: user.createdAt,
-      tokenVersion: user.tokenVersion,
-      email: user.email ?? undefined,
-      emailVerified: !!user.emailVerified,
-    };
   }
 
   getUser(id: string): UserRow | undefined {
-    return this.rowToUser(
-      this.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Record<string, unknown> | undefined,
-    );
-  }
-
-  getUserByEmail(email: string): UserRow | undefined {
-    return this.rowToUser(
-      this.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as
-        | Record<string, unknown>
-        | undefined,
-    );
+    return this.db
+      .prepare('SELECT id, name, salt, hash, createdAt, tokenVersion FROM users WHERE id = ?')
+      .get(id) as UserRow | undefined;
   }
 
   createUser(user: UserRow): void {
     this.db
       .prepare(
-        `INSERT INTO users (id, name, salt, hash, createdAt, tokenVersion, email, emailVerified)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO users (id, name, salt, hash, createdAt, tokenVersion)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, salt = excluded.salt,
            hash = excluded.hash, createdAt = excluded.createdAt,
-           tokenVersion = excluded.tokenVersion, email = excluded.email,
-           emailVerified = excluded.emailVerified`,
+           tokenVersion = excluded.tokenVersion`,
       )
-      .run(
-        user.id,
-        user.name,
-        user.salt,
-        user.hash,
-        user.createdAt,
-        user.tokenVersion ?? 1,
-        user.email ?? null,
-        user.emailVerified ? 1 : 0,
-      );
+      .run(user.id, user.name, user.salt, user.hash, user.createdAt, user.tokenVersion ?? 1);
   }
 
   deleteUser(id: string): void {
     this.db.prepare('DELETE FROM users WHERE id = ?').run(id);
     this.db.prepare('DELETE FROM states WHERE userId = ?').run(id);
     this.db.prepare('DELETE FROM revisions WHERE userId = ?').run(id);
-    this.db.prepare('DELETE FROM email_tokens WHERE userId = ?').run(id);
   }
 
   getState(userId: string): StateRow | undefined {
@@ -190,25 +137,6 @@ export class SqliteStore implements StateStore {
       .get(userId, rev) as StateRow | undefined;
   }
 
-  putEmailToken(token: EmailTokenRow): void {
-    // One active token per user+kind; also sweep expired rows.
-    this.db.prepare('DELETE FROM email_tokens WHERE (userId = ? AND kind = ?) OR expiresAt < ?')
-      .run(token.userId, token.kind, Date.now());
-    this.db
-      .prepare('INSERT INTO email_tokens (tokenHash, userId, kind, expiresAt) VALUES (?, ?, ?, ?)')
-      .run(token.tokenHash, token.userId, token.kind, token.expiresAt);
-  }
-
-  getEmailToken(tokenHash: string): EmailTokenRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM email_tokens WHERE tokenHash = ? AND expiresAt >= ?')
-      .get(tokenHash, Date.now()) as EmailTokenRow | undefined;
-    return row;
-  }
-
-  deleteEmailToken(tokenHash: string): void {
-    this.db.prepare('DELETE FROM email_tokens WHERE tokenHash = ?').run(tokenHash);
-  }
 }
 
 /**

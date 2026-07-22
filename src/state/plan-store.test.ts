@@ -36,7 +36,7 @@ let seq = 0;
 beforeEach(async () => {
   installStorage();
   installFetch();
-  const res = await signup(`user${seq}`, `user${seq}@t.dev`, 'pass1234');
+  const res = await signup(`user${seq}`, 'pass1234');
   seq += 1;
   if (res.userId) store.signIn(res.userId);
 });

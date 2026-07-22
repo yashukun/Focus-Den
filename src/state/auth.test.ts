@@ -18,7 +18,7 @@ function installStorage() {
 }
 
 // A tiny in-memory backend behind a stubbed fetch.
-const users = new Map<string, { name: string; email: string; password: string }>();
+const users = new Map<string, { name: string; password: string }>();
 
 function jsonRes(status: number, obj: unknown): Response {
   return {
@@ -39,17 +39,14 @@ function installFetch(offline = false) {
       if (path.endsWith('/api/auth/signup')) {
         const id = String(body.name).trim().toLowerCase();
         if (users.has(id)) return jsonRes(409, { error: 'That name is taken — try signing in.' });
-        const email = String(body.email).trim().toLowerCase();
-        users.set(id, { name: String(body.name).trim(), email, password: body.password });
-        return jsonRes(200, { token: `t.${id}`, userId: id, name: String(body.name).trim(), email, emailVerified: false });
+        users.set(id, { name: String(body.name).trim(), password: body.password });
+        return jsonRes(200, { token: `t.${id}`, userId: id, name: String(body.name).trim() });
       }
       if (path.endsWith('/api/auth/login')) {
         const who = String(body.identifier ?? body.name).trim().toLowerCase();
-        const entry = who.includes('@')
-          ? [...users.entries()].find(([, u]) => u.email === who)
-          : users.has(who) ? ([who, users.get(who)!] as const) : undefined;
-        if (!entry || entry[1].password !== body.password) return jsonRes(401, { error: 'Incorrect name/email or password.' });
-        return jsonRes(200, { token: `t.${entry[0]}`, userId: entry[0], name: entry[1].name, email: entry[1].email, emailVerified: false });
+        const entry = users.has(who) ? ([who, users.get(who)!] as const) : undefined;
+        if (!entry || entry[1].password !== body.password) return jsonRes(401, { error: 'Incorrect name or password.' });
+        return jsonRes(200, { token: `t.${entry[0]}`, userId: entry[0], name: entry[1].name });
       }
       return jsonRes(404, { error: 'not found' });
     }),
@@ -73,7 +70,7 @@ describe('auth (API-backed with offline fallback)', () => {
   });
 
   it('signs up via the server and caches the account locally', async () => {
-    const res = await signup('Sam', 'sam@t.dev', 'hunter22');
+    const res = await signup('Sam', 'hunter22');
     expect(res.ok).toBe(true);
     expect(res.userId).toBe('sam');
     expect(listAccounts()).toHaveLength(1);
@@ -81,27 +78,27 @@ describe('auth (API-backed with offline fallback)', () => {
   });
 
   it('never caches the password in plaintext', async () => {
-    await signup('Sam', 'sam@t.dev', 'hunter22');
+    await signup('Sam', 'hunter22');
     const acc = getAccount('sam')!;
     expect(acc.hash).not.toContain('hunter22');
     expect(acc.salt.length).toBeGreaterThan(0);
   });
 
   it('rejects short passwords before hitting the server', async () => {
-    const res = await signup('Sam', 'sam@t.dev', 'no');
+    const res = await signup('Sam', 'no');
     expect(res.ok).toBe(false);
     expect(users.size).toBe(0);
   });
 
   it('rejects a duplicate name (server 409)', async () => {
-    await signup('Sam', 'sam@t.dev', 'hunter22');
-    const dup = await signup('SAM', 'sam2@t.dev', 'whatever');
+    await signup('Sam', 'hunter22');
+    const dup = await signup('SAM', 'whatever');
     expect(dup.ok).toBe(false);
     expect(dup.error).toMatch(/taken/i);
   });
 
   it('logs in with the correct password and rejects a wrong one', async () => {
-    await signup('Sam', 'sam@t.dev', 'hunter22');
+    await signup('Sam', 'hunter22');
     logout();
     expect((await login('Sam', 'wrong')).ok).toBe(false);
     const good = await login('sam', 'hunter22');
@@ -109,19 +106,8 @@ describe('auth (API-backed with offline fallback)', () => {
     expect(good.userId).toBe('sam');
   });
 
-  it('logs in by email — online and via the offline cache', async () => {
-    await signup('Sam', 'sam@t.dev', 'hunter22');
-    logout();
-    expect((await login('sam@t.dev', 'hunter22')).ok).toBe(true);
-    logout();
-    installFetch(true); // offline: matched against the cached account's email
-    const offline = await login('sam@t.dev', 'hunter22');
-    expect(offline.ok).toBe(true);
-    expect(offline.userId).toBe('sam');
-  });
-
   it('falls back to the local cache when offline', async () => {
-    await signup('Sam', 'sam@t.dev', 'hunter22'); // online: caches account locally
+    await signup('Sam', 'hunter22'); // online: caches account locally
     logout();
     installFetch(true); // now offline
     const offline = await login('Sam', 'hunter22');

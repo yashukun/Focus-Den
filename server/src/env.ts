@@ -32,17 +32,7 @@ export const env = {
    * (set ADMIN_USER explicitly when deploying).
    */
   adminUser: (process.env.ADMIN_USER ?? '').trim().toLowerCase() || (isProduction ? null : 'admin'),
-  /** Sender for account emails, e.g. "Focus Den <no-reply@example.com>". Unset → console mailer. */
-  sesFrom: process.env.SES_FROM || null,
-  /** AWS region for SES (falls back to the SDK's AWS_REGION resolution). */
-  sesRegion: process.env.SES_REGION || null,
-  /** Public base URL used in email links. */
-  appUrl: process.env.APP_URL || 'http://localhost:5173',
 };
-
-if (isProduction && !env.sesFrom) {
-  console.warn('[focus-den] SES_FROM is unset — account emails will only print to the server log.');
-}
 
 if (env.jwtSecret.startsWith('dev-only')) {
   if (isProduction) {
