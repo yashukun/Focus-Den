@@ -4,10 +4,11 @@ A single-user, focus-driven shift tracker with a cozy pixel room. Track a
 12-hour shift with Slack-style status switching, earn points for focused work,
 and spend them on a pixel avatar + room that visibly grows.
 
-Built with **React + TypeScript + Vite**, plus a small **Node + TypeScript
-backend** (Fastify) so a profile's data **syncs across devices**. The app is
-**local-first**: `localStorage` is the instant, offline working copy, and the
-server is the cross-device source of truth (last-write-wins).
+Built with **React + TypeScript + Vite**. The app is **fully local** — no
+accounts, no cloud: your den lives in the browser's `localStorage`, and
+Settings offers one-click JSON export/import for backups or moving devices. A
+small **Node + TypeScript** (Fastify) server is bundled purely to host the
+built app on your own box (Docker, AWS, or Homebrew).
 
 ## Run it
 
@@ -15,69 +16,53 @@ server is the cross-device source of truth (last-write-wins).
 npm install                 # frontend deps
 npm install --prefix server # backend deps (once)
 
-npm run dev:all   # web (http://localhost:5173) + api (http://localhost:8787)
-# or separately: `npm run dev` and `npm run server`
+npm run dev       # the app, at http://localhost:5173
 
 npm test                    # frontend tests
-npm test --prefix server    # backend tests
+npm test --prefix server    # server tests
 npm run build               # typecheck + production build
 ```
 
-Vite proxies `/api` → the local server, so there's no CORS setup in dev.
+The server is only needed when testing the production single-box setup:
+`npm run dev:all` runs web + server together (Vite proxies `/api` → 8787).
 
 More for contributors in **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (code
 map, house rules, worked examples). CI runs typecheck + tests + build on every
 push; deployed servers can auto-deploy the newest CI-green commit (see the
 deploy guide).
 
-## Sign in & sync
+## Your data
 
-On first launch you create a **profile** (name + email + password) against the
-backend; a verification link lands in your inbox (AWS SES — or the server log
-in dev). Sign in later with **your username or your email**, and use **Forgot
-password?** on the sign-in screen for an emailed reset link (verified emails
-only). Passwords are hashed server-side with **scrypt + a per-user salt**
-(never stored in plaintext); the client keeps a JWT and a small local account
-cache so a returning user can also sign in **offline**. Accounts are permanent
-— nothing is ever auto-deleted; only the owner can delete their profile
-(password-confirmed). **Settings → Account** covers change password / change
-email / sign out everywhere / delete, and the header shows live sync status —
-if a session expires, a banner re-authenticates in place without losing local
-work.
+Everything lives in this browser's `localStorage` — there are no accounts and
+nothing leaves your machine. Every change persists instantly, and the state is
+one versioned document that's deeply validated on load, so old or hand-edited
+backups coerce safely instead of crashing the app.
 
-Changes save to `localStorage` instantly and push to the server (debounced); on
-sign-in / reconnect the app pulls and adopts whichever copy is newer. You can
-keep working fully **offline** — edits sync when you're back online.
+**Settings → Export JSON** downloads your whole den as a single file;
+**Import** restores it (that's also how you move to another browser or
+machine). Clearing the browser's site data deletes the den, so export
+occasionally.
 
-Sync conflicts are resolved last-write-wins by edit time, using a
-**server-corrected clock**: the client estimates its clock offset against the
-server (midpoint method on `/api/health`) and the server clamps timestamps that
-claim to be from its future — so a device with a skewed clock can't silently win
-every conflict.
+> Earlier versions synced profiles to the bundled server behind
+> username/password accounts. That client-side sync layer was removed for the
+> simpler local-only model; the implementation (and the server's still-present
+> sync API) lives in git history if it's ever wanted again.
 
-The server keeps the **last 30 accepted states per profile** as revisions;
-restore any of them from **Settings → Server backups** (the restored copy is
-re-stamped as newest and propagates to all devices).
+## Host it yourself
 
-Security note: the server is a *validated document store* scoped per user, not a
-rules engine — game-rule enforcement stays client-side. That's fine for a
-personal app or a **trusted circle** (each profile is fully isolated; nobody can
-read or affect anyone else's data), but not for competitive/public features —
-see the plan for that hardening. Persistence sits behind a small interface
-(`server/src/store.ts`): **SQLite by default** (via Node's built-in
-`node:sqlite` — still zero external deps), with the legacy JSON-file store
-available by pointing `DB_PATH` at a `.json` file. A fresh SQLite db imports an
-existing `data/db.json` once.
+The bundled server's remaining job is to serve the built frontend — **one
+small box runs the whole app**, and your den still stays in each browser.
 
-## Deploy (Level 1 — a trusted circle)
+Easiest on a Mac, via [Homebrew](https://github.com/yashukun/homebrew-focus-den):
 
-The server ships deploy-ready for small groups: strict per-IP rate limits on
-the auth routes, a body-size cap on state uploads, tokens die with their
-account, it refuses to start in production without a real `JWT_SECRET`, and it
-serves the built frontend itself — **one small box runs the whole app**.
+```bash
+brew tap yashukun/focus-den
+brew install focus-den
+brew services start focus-den   # then open http://localhost:8787
+```
 
-Full AWS walkthrough with best practices (Lightsail, HTTPS, backups, day-2
-ops): **[docs/DEPLOY-AWS.md](docs/DEPLOY-AWS.md)** — or the short version, on
+Full AWS walkthrough with best practices (Lightsail, HTTPS, day-2 ops):
+**[docs/DEPLOY-AWS.md](docs/DEPLOY-AWS.md)** — or the short version, on
 the server: `./deploy/aws-setup.sh focus.yourdomain.com` (idempotent; also how
 you update). Runs on any Docker host:
 
@@ -97,14 +82,11 @@ focus.example.com {
 ```
 
 Update a running deploy with `git pull`, rebuild the image (build command
-above), then `docker rm -f focus-den` and re-run the `docker run` command —
-user data lives on the `focus-den-data` volume and
-survives rebuilds. For off-box backups, enable your host's disk snapshots
-and/or stream the SQLite file to any S3-compatible bucket with **Litestream**
-— see `server/litestream.yml.example`.
-
-Forgotten passwords (no email flow at this tier) are reset by the admin on the
-host: `npm --prefix server run reset-password -- <name> <new-password>`.
+above), then `docker rm -f focus-den` and re-run the `docker run` command.
+Your den's data is in the browser, not on the box — there's nothing
+server-side to back up. (`JWT_SECRET` and the data volume are legacy
+requirements of the bundled server's sync-era API, which still refuses to
+start in production without them.)
 
 ## How it works
 
@@ -165,16 +147,15 @@ Tickets and tracked time persist per profile.
 
 ## Screens
 
-Dashboard · Plan · Room (customize + shop) · History (with hand-rolled SVG
-analytics: worked hours this week, cumulative points, break-budget usage) ·
-Settings (account,
-themes, soundscape + volume, JSON export/import, reset, testing tools). A
-first-run onboarding explains the loop and is replayable from Settings.
+Home (landing) · Today · Plan · Den (customize + shop) · Journal (with
+hand-rolled SVG analytics: worked hours this week, cumulative points,
+break-budget usage) · Settings (themes, soundscape + volume, JSON
+export/import, reset, testing tools). A first-run onboarding explains the loop
+and is replayable from Settings.
 
 ## Architecture
 
-The domain logic is deliberately isolated so a FastAPI/Postgres backend can be
-added later without touching it.
+The domain logic is deliberately isolated from React, storage and the clock.
 
 ```
 src/
@@ -183,19 +164,15 @@ src/
                unit-tested. No React, no storage, no clock reads.
   state/       Persisted store (localStorage adapter) + React hooks. Versioned
                state with a v1 -> v2 migration.
+  fx/          One-shot animation effects (anime.js) + hooks. Fire-and-forget,
+               no-op under prefers-reduced-motion.
   room/        The pixel-SVG room scene (cosmetics + props + animated layers).
   audio.ts     SFX + ambient soundscapes, synthesized (no files).
-  components/  Dashboard, Shop, RoomView, History, Charts, Settings, DeepWork,
-               Onboarding, SummaryModal, WeekStreak.
-  App.tsx      Shell: header, tabs, theme + sound, per-second heartbeat.
+  components/  Home, Dashboard, Shop, RoomView, History, Charts, Settings,
+               DeepWork, Onboarding, SummaryModal, WeekStreak.
+  App.tsx      Shell: landing/den views, header, tabs, theme + sound,
+               per-second heartbeat.
 ```
 
 `core/` never reads the clock or storage — every function takes an explicit
 `now`, which keeps it deterministic and testable (`src/core/core.test.ts`).
-
-## Phase 2 status
-
-Milestones 1–3 (full catalog + animated items, functional perks, refinement &
-polish) are complete. **Milestone 4 (FastAPI + Postgres backend)** is optional
-and not yet built — the persistence seam (`src/state/persist.ts`) is where the
-localStorage adapter would be swapped for an API client.

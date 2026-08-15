@@ -55,7 +55,7 @@ describe('coerceState (deep validation)', () => {
     })!;
     expect(s.shift.status).toBe('idle');
     expect(s.settings.theme).toBe('cozy');
-    expect(s.settings.appearance).toBe('system');
+    expect(s.settings.appearance).toBe('light'); // light is the default look
     expect(s.settings.soundscape).toBe('rain');
   });
 

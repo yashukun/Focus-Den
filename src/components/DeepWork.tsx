@@ -59,19 +59,17 @@ export function DeepWork({ state, now }: DeepWorkProps) {
       ) : (
         <div className="deepwork-body">
           <div className="deepwork-timer mono">--:--:--</div>
-          <p className="muted">Clock in to start a focus session.</p>
+          <p className="muted">Settle in first — then this space is all yours.</p>
         </div>
       )}
 
-      {state.perks.soundscape && (
-        <button
-          className={`btn btn-ghost deepwork-sound ${state.settings.soundscapeOn ? 'is-on' : ''}`}
-          onClick={() => store.setSoundscapeOn(!state.settings.soundscapeOn)}
-          aria-pressed={state.settings.soundscapeOn}
-        >
-          {state.settings.soundscapeOn ? '♪ Soundscape on' : '♪ Soundscape off'}
-        </button>
-      )}
+      <button
+        className={`btn btn-ghost deepwork-sound ${state.settings.soundscapeOn ? 'is-on' : ''}`}
+        onClick={() => store.setSoundscapeOn(!state.settings.soundscapeOn)}
+        aria-pressed={state.settings.soundscapeOn}
+      >
+        {state.settings.soundscapeOn ? '♪ Soundscape on' : '♪ Soundscape off'}
+      </button>
     </div>
   );
 }

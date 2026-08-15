@@ -16,7 +16,7 @@ import { History } from './components/History';
 import { SummaryModal } from './components/SummaryModal';
 import { Settings } from './components/Settings';
 import { DeepWork } from './components/DeepWork';
-import { Login } from './components/Login';
+import { Home } from './components/Home';
 import { RoomScene } from './room/RoomScene';
 import App from './App';
 
@@ -74,42 +74,45 @@ describe('render smoke', () => {
     expect(full).toContain('<svg');
   });
 
-  it('renders the full App (shows the login gate when signed out)', () => {
+  it('renders the full App (opens on the landing page)', () => {
     const html = renderToString(<App />);
     expect(html).toContain('Focus');
-    expect(html).toContain('Create account');
+    expect(html).toContain('A cozy corner for deep focus');
   });
 
-  it('renders the Login screen', () => {
-    const html = renderToString(<Login />);
-    expect(html).toContain('Sign in');
-    expect(html).toContain('Password');
+  it('renders the Home landing page with the Focus call to action', () => {
+    const html = renderToString(<Home state={idleState()} onFocus={() => {}} />);
+    expect(html).toContain('Focus');
+    expect(html).toContain('One gentle ritual');
   });
 
   it('renders the Dashboard in idle and active states', () => {
     const idle = renderToString(<Dashboard state={idleState()} now={NOW} onGoToRoom={() => {}} />);
-    expect(idle).toContain('Ready to focus');
+    expect(idle).toContain('Your den is ready');
+    expect(idle).toContain('Settle in');
 
     const active: State = { ...idleState(), shift: activeShift() };
     const html = renderToString(<Dashboard state={active} now={NOW} onGoToRoom={() => {}} />);
-    expect(html).toContain('Working');
-    expect(html).toContain('Breaks');
+    expect(html).toContain('In flow');
+    expect(html).toContain('Breathers');
+    expect(html).toContain('Wins');
   });
 
-  it('renders Shop, RoomView and History', () => {
+  it('renders Shop, RoomView and the Journal', () => {
     const s = idleState();
     expect(renderToString(<Shop state={s} />)).toContain('Shop');
     const room = renderToString(<RoomView state={s} />);
     expect(room).toContain('Character');
     expect(room).toContain('Customize');
     expect(room).toContain('Shop');
-    expect(renderToString(<History state={s} now={NOW} />)).toContain('History');
+    expect(renderToString(<History state={s} now={NOW} />)).toContain('Journal');
   });
 
-  it('renders the Plan calendar', () => {
+  it('renders the Plan calendar with the intention composer', () => {
     const html = renderToString(<PlanView state={idleState()} now={NOW} />);
     expect(html).toContain('Mon');
-    expect(html).toContain('Goal for the day');
+    expect(html).toContain('I intend to');
+    expect(html).toContain('Time goal');
   });
 
   it('renders the summary modal', () => {
@@ -130,27 +133,25 @@ describe('render smoke', () => {
         onClose={() => {}}
       />,
     );
-    expect(html).toContain('Shift complete');
+    expect(html).toContain('Day complete');
     expect(html).toContain('Perfect week');
   });
 
-  it('renders Settings (with owned perks) and the deep-work overlay', () => {
+  it('renders Settings and the deep-work overlay', () => {
     const s: State = {
       ...idleState(),
-      perks: { ...idleState().perks, soundscape: true, themeMidnight: true, deepWork: true },
+      perks: { ...idleState().perks, themeMidnight: true, deepWork: true },
     };
-    const settings = renderToString(
-      <Settings state={s} session={{ userId: 'sam', name: 'Sam', isAdmin: true }} />,
-    );
+    const settings = renderToString(<Settings state={s} />);
     expect(settings).toContain('Settings');
-    expect(settings).toContain('Sign out');
+    expect(settings).toContain('Soundscape');
     expect(settings).toContain('Reset everything');
 
     const active: State = { ...s, settings: { ...s.settings, deepWork: true }, shift: activeShift() };
     expect(renderToString(<DeepWork state={active} now={NOW} />)).toContain('Deep work');
   });
 
-  it('renders History analytics with completed shifts', () => {
+  it('renders Journal analytics with completed days', () => {
     const s: State = {
       ...idleState(),
       perks: { ...idleState().perks, streakFreeze: 1 },

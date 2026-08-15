@@ -1,8 +1,10 @@
 /**
- * App shell: header (brand, live status pill, balance, theme + sound toggles),
- * tab nav, the active screen, the end-of-shift summary, and (when unlocked) the
- * deep-work overlay. A single `useNow` drives the per-second re-render and the
- * store heartbeat (break grace + auto clock-out), so the engine stays live.
+ * App shell: the landing page (Home) and the den itself. Inside the den:
+ * header (brand → back home, live status pill, balance, theme + sound
+ * toggles), tab nav, the active screen, the end-of-day summary, and (when
+ * unlocked) the deep-work overlay. A single `useNow` drives the per-second
+ * re-render and the store heartbeat (breather grace + auto wrap-up), so the
+ * engine stays live even while you're on the landing page.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -10,6 +12,7 @@ import { isActive } from './core';
 import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume } from './audio';
 import { useNow, useStore } from './state/hooks';
 import { store } from './state/store';
+import { Home } from './components/Home';
 import { Dashboard } from './components/Dashboard';
 import { RoomView } from './components/RoomView';
 import { PlanView } from './components/PlanView';
@@ -18,72 +21,28 @@ import { Settings } from './components/Settings';
 import { SummaryModal } from './components/SummaryModal';
 import { DeepWork } from './components/DeepWork';
 import { Onboarding } from './components/Onboarding';
-import { Login } from './components/Login';
 import { STATUS_META } from './components/statusMeta';
 import { applyTheme, resolvedAppearance } from './theme';
 
 type Tab = 'dashboard' | 'plan' | 'room' | 'history' | 'settings';
-
-const SYNC_LABELS = {
-  synced: 'Synced with your server',
-  pending: 'Saving to your server…',
-  offline: 'Offline — changes saved on this device, will sync later',
-  expired: 'Session expired — sign in to resume syncing',
-  incompatible:
-    'This device runs an outdated app version — reload the page to update and resume syncing',
-} as const;
-
-/** Inline re-login: keeps all local work, resumes syncing on success. */
-function SessionExpiredBar() {
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy || !password) return;
-    setBusy(true);
-    setError(null);
-    const res = await store.reauthenticate(password);
-    setBusy(false);
-    if (!res.ok) setError(res.error ?? 'Sign-in failed.');
-  }
-
-  return (
-    <form className="expired-bar" onSubmit={submit}>
-      <span>Your session expired — your work is safe on this device. Sign in to resume syncing:</span>
-      <input
-        className="input"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-        autoComplete="current-password"
-        aria-label="Password"
-      />
-      <button className="btn btn-sm btn-primary" type="submit" disabled={busy || !password}>
-        {busy ? '…' : 'Sign in'}
-      </button>
-      {error && <span className="login-error">{error}</span>}
-    </form>
-  );
-}
+type View = 'home' | 'den';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: '⏱' },
+  { id: 'dashboard', label: 'Today', icon: '⏱' },
   { id: 'plan', label: 'Plan', icon: '🗓' },
-  { id: 'room', label: 'Room', icon: '🛋' },
-  { id: 'history', label: 'History', icon: '✓' },
+  { id: 'room', label: 'Den', icon: '🛋' },
+  { id: 'history', label: 'Journal', icon: '📖' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
 
 export default function App() {
   const now = useNow();
-  const { state, summary, session, syncStatus } = useStore();
+  const { state, summary } = useStore();
+  const [view, setView] = useState<View>('home');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [soundOn, setSoundOn] = useState(() => !isMuted());
 
-  const { settings, perks } = state;
+  const { settings } = state;
 
   // Apply the active theme + appearance.
   useEffect(() => {
@@ -98,9 +57,9 @@ export default function App() {
 
   // Start/stop the ambient soundscape.
   useEffect(() => {
-    if (perks.soundscape && settings.soundscapeOn) setSoundscape(settings.soundscape);
+    if (settings.soundscapeOn) setSoundscape(settings.soundscape);
     else setSoundscape(null);
-  }, [perks.soundscape, settings.soundscapeOn, settings.soundscape]);
+  }, [settings.soundscapeOn, settings.soundscape]);
 
   // Cozy click feedback for every button — data-sound picks a richer cue.
   useEffect(() => {
@@ -115,7 +74,7 @@ export default function App() {
     return () => document.removeEventListener('click', onClick);
   }, []);
 
-  // Chime when a shift finalizes (manual or auto clock-out).
+  // Chime when a day finalizes (manual or auto wrap-up).
   const hadSummary = useRef(false);
   useEffect(() => {
     const has = summary !== null;
@@ -123,15 +82,12 @@ export default function App() {
     hadSummary.current = has;
   }, [summary]);
 
-  // Soft nudge the moment a break overruns and the shift goes not-clean.
+  // Soft nudge the moment a breather overruns and the day goes not-smooth.
   const wasClean = useRef(state.shift.clean);
   useEffect(() => {
     if (wasClean.current && !state.shift.clean) play('alert');
     wasClean.current = state.shift.clean;
   }, [state.shift.clean]);
-
-  // Auth gate — all hooks above run unconditionally so order stays stable.
-  if (!session) return <Login />;
 
   const appearance = resolvedAppearance(settings.theme, settings.appearance);
 
@@ -148,33 +104,38 @@ export default function App() {
     if (next) play('click');
   }
 
+  function enterDen() {
+    setTab('dashboard');
+    setView('den');
+  }
+
+  // Landing page — the den keeps ticking behind it.
+  if (view === 'home') {
+    return (
+      <>
+        <Home state={state} onFocus={enterDen} />
+        {summary && <SummaryModal summary={summary} onClose={() => store.dismissSummary()} />}
+      </>
+    );
+  }
+
   const active = isActive(state.shift.status);
   const meta = STATUS_META[state.shift.status];
 
   return (
     <div className="app">
       <header className="app-header">
-        <div className="brand">
+        <button
+          className="brand brand-btn"
+          onClick={() => setView('home')}
+          title="Back to the welcome page"
+          data-sound="none"
+        >
           <span className="brand-mark" aria-hidden="true" />
           <span className="brand-name">Focus&nbsp;Den</span>
-        </div>
+        </button>
 
         <div className="header-right">
-          <span
-            className={`sync-dot sync-${syncStatus}`}
-            title={SYNC_LABELS[syncStatus]}
-            role="status"
-            aria-label={SYNC_LABELS[syncStatus]}
-          />
-          <button
-            className="header-user"
-            onClick={() => setTab('settings')}
-            title={`Signed in as ${session.name} — account settings`}
-            data-sound="none"
-          >
-            <span className="header-user-dot" aria-hidden="true" />
-            <span className="header-user-name">{session.name}</span>
-          </button>
           {active && (
             <span className={`status-pill tone-${meta.tone}`}>
               <span className="status-dot" aria-hidden="true" />
@@ -208,8 +169,6 @@ export default function App() {
         </div>
       </header>
 
-      {syncStatus === 'expired' && <SessionExpiredBar />}
-
       <nav className="tabbar" aria-label="Primary">
         {TABS.map((t) => (
           <button
@@ -224,14 +183,15 @@ export default function App() {
         ))}
       </nav>
 
-      <main className="screen">
+      {/* key={tab} re-runs the entrance animation on every switch */}
+      <main className="screen screen-enter" key={tab}>
         {tab === 'dashboard' && (
           <Dashboard state={state} now={now} onGoToRoom={() => setTab('room')} />
         )}
         {tab === 'plan' && <PlanView state={state} now={now} />}
         {tab === 'room' && <RoomView state={state} />}
         {tab === 'history' && <History state={state} now={now} />}
-        {tab === 'settings' && <Settings state={state} session={session} />}
+        {tab === 'settings' && <Settings state={state} />}
       </main>
 
       {!settings.onboarded && <Onboarding />}

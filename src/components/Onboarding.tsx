@@ -1,5 +1,5 @@
 /**
- * First-run onboarding — a short explainer of the shift, breaks, and points.
+ * First-run onboarding — a short explainer of the day, breathers, and points.
  * Shown until dismissed; replayable from Settings.
  */
 
@@ -8,19 +8,19 @@ import { store } from '../state/store';
 
 const STEPS = [
   {
-    emoji: '⏱',
-    title: 'Clock in for a 12-hour shift',
-    body: 'Your shift runs 12 hours from when you clock in. One per day, Mon–Sat (Sunday is off).',
+    emoji: '🕯️',
+    title: 'Settle in, once a day',
+    body: 'Your day unfolds over 12 hours from the moment you settle in. One day at a time, Mon–Sat (Sunday is off).',
   },
   {
     emoji: '☕',
-    title: 'Take your breaks',
-    body: 'Break 1 (20m), Break 2 (20m) and Lunch (50m) are single-use. Overrun the 3-min grace and you auto-go Offline — tap Working to resume.',
+    title: 'Take your breathers',
+    body: 'Stretch (20m), Recharge (20m) and Lunch (50m) are each single-use. Overrun the 3-min grace and you drift Away — tap In flow to come back.',
   },
   {
     emoji: '◈',
-    title: 'Earn points, grow your den',
-    body: '10 pts per worked hour, +50 for a clean shift, +20 for 3+ tasks, +200 for a perfect week. Spend them in the Shop on your room and avatar.',
+    title: 'Gather points, grow your den',
+    body: '10 pts per hour in flow, +50 for a smooth day, +20 for 3+ wins, +200 for a perfect week. Spend them on your room and avatar.',
   },
 ];
 
@@ -46,7 +46,7 @@ export function Onboarding() {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="onboard-title" className="modal-title">Welcome to Focus Den</h2>
-        <p className="muted">A cozy way to track your shift and grow a little pixel room.</p>
+        <p className="muted">A cozy way to spend a focused day and grow a little pixel room.</p>
 
         <ul className="onboard-steps">
           {STEPS.map((s) => (

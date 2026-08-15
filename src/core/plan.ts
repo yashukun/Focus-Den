@@ -9,7 +9,7 @@
  */
 
 import { addDays } from './dates';
-import type { PlanState, PlanTicket, TicketStatus, TrackingState } from './types';
+import type { PlanState, PlanTicket, TrackingState } from './types';
 
 export function freshPlan(): PlanState {
   return { tickets: {} };
@@ -96,16 +96,6 @@ export function updateTicket(
     dateKey,
     list.map((t) => (t.id === id ? { ...t, ...patch } : t)),
   );
-}
-
-export function setTicketStatus(
-  plan: PlanState,
-  dateKey: string,
-  id: string,
-  status: TicketStatus,
-  todayKey: string,
-): PlanState {
-  return updateTicket(plan, dateKey, id, { status }, todayKey);
 }
 
 /** Remove a ticket (no-op on locked days). */

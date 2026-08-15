@@ -125,7 +125,8 @@ function coercePerks(v: unknown, base: Perks): Perks {
   const obj = (v ?? {}) as Partial<Record<keyof Perks, unknown>>;
   return {
     streakFreeze: int(obj.streakFreeze, base.streakFreeze, 0, MAX_FREEZES),
-    soundscape: bool(obj.soundscape, base.soundscape),
+    // Always unlocked now — older saves that stored `false` are upgraded.
+    soundscape: true,
     themeMidnight: bool(obj.themeMidnight, base.themeMidnight),
     themeSunrise: bool(obj.themeSunrise, base.themeSunrise),
     graceBonusMs: num(obj.graceBonusMs, base.graceBonusMs, 0, MAX_GRACE_BONUS_MS),

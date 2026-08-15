@@ -41,7 +41,6 @@ export const ITEMS: Item[] = [
 
   // ── Perks (functional — see store + core) ──────────────────────────────
   { id: 'perk_streak_freeze', name: 'Streak Freeze', description: 'Mark one missed Mon–Sat day complete. Consumable.', price: 400, category: 'perks', kind: 'perk', consumable: true },
-  { id: 'perk_soundscape', name: 'Soundscape Pack', description: 'Ambient rain / café / lo-fi while you focus.', price: 300, category: 'perks', kind: 'perk' },
   { id: 'perk_theme_midnight', name: 'Midnight Theme', description: 'A deep indigo color theme.', price: 250, category: 'perks', kind: 'perk' },
   { id: 'perk_theme_sunrise', name: 'Sunrise Theme', description: 'A warm peach color theme.', price: 250, category: 'perks', kind: 'perk' },
   { id: 'perk_grace', name: 'Break Grace +1 min', description: 'Adds 60s of grace to every break. Permanent.', price: 600, category: 'perks', kind: 'perk' },

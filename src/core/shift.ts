@@ -45,7 +45,8 @@ export function freshShift(): ShiftState {
 export function defaultPerks() {
   return {
     streakFreeze: 0,
-    soundscape: false,
+    // Soundscapes ship unlocked — everyone gets the ambience.
+    soundscape: true,
     themeMidnight: false,
     themeSunrise: false,
     graceBonusMs: 0,
@@ -56,7 +57,8 @@ export function defaultPerks() {
 export function defaultSettings() {
   return {
     theme: 'cozy' as const,
-    appearance: 'system' as const,
+    // Light is the default look; dark stays one toggle away.
+    appearance: 'light' as const,
     soundscape: 'rain' as const,
     soundscapeOn: false,
     soundscapeVolume: 0.6,
@@ -142,16 +144,6 @@ export function liveBreakUsed(shift: ShiftState, now: number): Record<BreakKey, 
 /** Real accumulated working ms (committed + live). */
 export function workedMs(shift: ShiftState, now: number): number {
   return liveAcc(shift, now).working;
-}
-
-/** Live ms spent in a given break this shift. */
-export function breakElapsed(shift: ShiftState, key: BreakKey, now: number): number {
-  return liveBreakUsed(shift, now)[key];
-}
-
-/** Remaining ms in a break before its limit (clamped at 0; ignores grace). */
-export function breakRemaining(shift: ShiftState, key: BreakKey, now: number): number {
-  return Math.max(0, BREAK_LIMITS[key] - breakElapsed(shift, key, now));
 }
 
 /** A break is consumed (single-use) once any committed time exists for it. */

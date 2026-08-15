@@ -201,6 +201,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* theme switches glide instead of snapping */
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 h1,
@@ -248,6 +250,21 @@ p { margin: 0; }
 }
 
 .brand { display: flex; align-items: center; gap: 0.5rem; }
+/* the brand doubles as the way home */
+.brand-btn {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+  padding: 0.2rem 0.4rem;
+  margin-left: -0.4rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.brand-btn:hover { background: var(--surface-2); }
+.brand-btn:hover .brand-mark { transform: rotate(-8deg); }
+.brand-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .brand-mark {
   width: 20px;
   height: 20px;
@@ -255,6 +272,7 @@ p { margin: 0; }
   background:
     linear-gradient(135deg, var(--points) 0 50%, var(--work) 50% 100%);
   box-shadow: inset 0 0 0 2px var(--paper), 0 0 0 2px var(--line-strong);
+  transition: transform 0.25s ease;
 }
 .brand-name { font-weight: 800; letter-spacing: 0.02em; }
 
@@ -845,13 +863,7 @@ p { margin: 0; }
 
 /* ── Manage panel ────────────────────────────────────────────────────────── */
 
-.manage-section {
-  padding: 0.75rem 0;
-  border-top: 1px solid var(--line);
-}
-.manage-section h3 { margin-bottom: 0.5rem; }
 .manage-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.manage-danger h3 { color: var(--danger); }
 
 /* ── Animations ──────────────────────────────────────────────────────────── */
 
@@ -1011,112 +1023,6 @@ p { margin: 0; }
 .setting-row:last-child { margin-bottom: 0; }
 .setting-msg { margin-top: 0.6rem; }
 
-/* ── Settings · Account card ─────────────────────────────────────────────── */
-
-.account-rows { margin: 0.1rem 0 0.9rem; }
-.account-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 0.55rem 0;
-}
-.account-row + .account-row { border-top: 1px solid var(--line); }
-.account-label {
-  flex: 0 0 96px;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.account-value {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  overflow-wrap: anywhere;
-}
-.account-value strong { color: var(--ink); }
-
-.badge {
-  font-size: 0.72rem;
-  padding: 0.12rem 0.55rem;
-  border-radius: 999px;
-  white-space: nowrap;
-  border: 1px solid transparent;
-}
-.badge-ok {
-  background: color-mix(in srgb, #5fae62 14%, var(--panel));
-  border-color: color-mix(in srgb, #5fae62 40%, transparent);
-}
-
-.account-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  border-top: 1px solid var(--line);
-  padding-top: 0.85rem;
-}
-.account-footnote { margin-top: 0.7rem; font-size: 0.82rem; }
-
-/* ── Accounts v1: login extras, sync status, session banners ─────────────── */
-
-.password-row { display: flex; gap: 0.4rem; align-items: center; }
-.password-row .input { flex: 1; }
-
-.login-heading { margin: 0.4rem 0 0; font-size: 1.1rem; }
-.login-link {
-  background: none;
-  border: none;
-  color: var(--ink-soft);
-  text-decoration: underline;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.2rem;
-  align-self: center;
-}
-.login-link:hover { color: var(--ink); }
-
-.sync-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-  flex: none;
-}
-.sync-synced { background: #5fae62; }
-.sync-pending { background: #d9a23c; }
-.sync-offline { background: var(--ink-soft); opacity: 0.5; }
-.sync-expired { background: #d05a5a; box-shadow: 0 0 0 3px color-mix(in srgb, #d05a5a 25%, transparent); }
-.sync-incompatible { background: #d05a5a; box-shadow: 0 0 0 3px color-mix(in srgb, #d05a5a 25%, transparent); }
-
-.expired-bar {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.9rem;
-  background: color-mix(in srgb, #d05a5a 12%, var(--panel));
-  border: 1px solid color-mix(in srgb, #d05a5a 35%, var(--line));
-  border-radius: 10px;
-  margin: 0.6rem 0.9rem 0;
-  font-size: 0.9rem;
-}
-.expired-bar .input { max-width: 180px; padding: 0.35rem 0.6rem; }
-
-.backup-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
-.backup-row {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.35rem 0;
-  border-top: 1px solid var(--line);
-  font-size: 0.9rem;
-}
-.backup-row span:nth-child(2) { flex: 1; }
 .manage-danger h2 { color: var(--danger); }
 
 .volume-row { display: flex; align-items: center; gap: 0.6rem; }
@@ -1216,75 +1122,7 @@ p { margin: 0; }
 .onboard-step-title { font-weight: 700; }
 .onboard-step-body { font-size: 0.86rem; color: var(--ink-soft); }
 
-/* ── Login / signup gate ─────────────────────────────────────────────────── */
-
-.login-screen {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(1rem, 5vw, 2rem);
-  background:
-    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--surface) 60%, var(--paper)), var(--paper));
-}
-.login-card {
-  width: min(380px, 100%);
-  padding: clamp(1.25rem, 4vw, 1.75rem);
-  box-shadow: var(--shadow-md);
-}
-.login-brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-weight: 800;
-  font-size: 1.4rem;
-}
-.login-brand .brand-mark { width: 26px; height: 26px; }
-.login-tagline { text-align: center; margin-top: 0.3rem; }
-.login-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.3rem;
-  margin: 1.25rem 0 1rem;
-  padding: 0.3rem;
-  background: var(--surface-2);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.login-tab {
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--ink-soft);
-  padding: 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.login-tab.is-active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
-.login-form { display: flex; flex-direction: column; gap: var(--space-3); }
-.login-field { display: flex; flex-direction: column; gap: 0.35rem; }
-.login-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-.login-error {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  padding: 0.5rem 0.65rem;
-  border-radius: var(--radius-sm);
-}
-.login-note { text-align: center; margin-top: 1rem; font-size: 0.78rem; }
-
-/* ── Version stamp (login corner + Settings footer) ──────────────────────── */
+/* ── Version stamp (home footer + Settings footer) ───────────────────────── */
 
 .app-version {
   font-size: 0.72rem;
@@ -1292,37 +1130,10 @@ p { margin: 0; }
   opacity: 0.8;
   user-select: none;
 }
-.login-screen .app-version {
-  position: fixed;
-  right: 0.85rem;
-  bottom: 0.65rem;
-}
 .settings-version {
   text-align: right;
   margin-top: 1rem;
 }
-
-/* ── Header account chip ─────────────────────────────────────────────────── */
-
-.header-user {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font: inherit;
-  font-weight: 700;
-  font-size: 0.82rem;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  padding: 0.22rem 0.6rem;
-  cursor: pointer;
-  max-width: 9rem;
-}
-.header-user:hover { background: var(--surface-2); }
-.header-user:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.header-user-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
-.header-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Day planner (calendar) ──────────────────────────────────────────────── */
 
@@ -1498,7 +1309,221 @@ select.input { cursor: pointer; }
 
 @media (max-width: 560px) {
   .charts { grid-template-columns: 1fr; }
-  .header-user-name { display: none; }
-  .header-user { padding: 0.3rem; }
   .cal-cell { padding: 0.2rem; }
+}
+
+/* ============================================================================
+   Motion & new surfaces — the landing page, screen transitions and the
+   intention composer. All eased with soft cubic-beziers; the global
+   prefers-reduced-motion block freezes every one of these.
+   ========================================================================= */
+
+/* ── Shared easing + entrances ───────────────────────────────────────────── */
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popCard {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Each tab switch glides its screen in (keyed remount in App.tsx). */
+.screen-enter {
+  animation: riseIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Tabs ease between states instead of snapping. */
+.tab { transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
+.tab-icon { transition: transform 0.2s ease; }
+.tab.is-active .tab-icon { transform: translateY(-1px) scale(1.08); }
+
+/* Quiet lift on browsable cards. */
+.shop-card,
+.home-feature {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.shop-card:hover,
+.home-feature:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+/* A newly added intention pops into the list. */
+.ticket-pop { animation: popCard 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Landing page ────────────────────────────────────────────────────────── */
+
+.home {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--surface) 60%, var(--paper)), var(--paper));
+}
+.home-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 2rem) clamp(0.9rem, 4vw, 1.5rem) 3rem;
+}
+.home-rise { animation: riseIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.home-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  margin-bottom: clamp(1.25rem, 4vw, 2.25rem);
+}
+.home-brand .brand-mark { width: 24px; height: 24px; }
+
+.home-hero { text-align: center; }
+.home-scene {
+  display: inline-block;
+  animation: riseIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both, homeFloat 7s ease-in-out 1.2s infinite;
+}
+.home-scene-svg {
+  width: min(400px, 86vw);
+  height: auto;
+  image-rendering: pixelated;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 2px var(--line-strong),
+    0 18px 40px rgba(40, 28, 12, 0.22);
+}
+@keyframes homeFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.home-title {
+  font-size: clamp(1.7rem, 5.5vw, 2.4rem);
+  letter-spacing: -0.02em;
+  margin-top: 1.25rem;
+}
+.home-tagline {
+  max-width: 34rem;
+  margin: 0.7rem auto 0;
+  color: var(--ink-soft);
+  font-size: 1.02rem;
+}
+.home-cta-row { margin-top: 1.5rem; }
+.home-cta {
+  min-width: 12rem;
+  font-size: 1.2rem;
+  letter-spacing: 0.01em;
+}
+.home-note { margin-top: 0.8rem; font-size: 0.8rem; }
+
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
+  margin-top: clamp(2rem, 6vw, 3rem);
+}
+.home-feature {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.05rem;
+  box-shadow: var(--shadow-sm);
+}
+.home-feature-emoji { font-size: 1.35rem; display: block; }
+.home-feature-title { font-size: 0.98rem; margin-top: 0.5rem; }
+.home-feature-body {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.home-foot {
+  margin-top: 2.5rem;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .home-features { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .home-features { grid-template-columns: 1fr; }
+}
+
+/* ── Intention composer (Plan) ───────────────────────────────────────────── */
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.composer-title-row { display: flex; gap: var(--space-2); }
+.composer-title-row .input { background: var(--surface); }
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.composer-label {
+  flex: 0 0 4.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.composer-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; flex: 1; }
+
+.chip {
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+.chip:hover { color: var(--ink); background: var(--surface-2); }
+.chip:active { transform: scale(0.96); }
+.chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.chip.is-on {
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 62%, #000);
+  color: #fff;
+}
+.chip-prio.is-on {
+  background: color-mix(in srgb, currentColor 18%, var(--surface));
+  border-color: currentColor;
+}
+.chip-prio.tone-break.is-on { color: var(--break); }
+.chip-prio.tone-points.is-on { color: var(--points); }
+.chip-prio.tone-offline.is-on { color: var(--offline); }
+
+.composer-custom { flex: 0 0 5rem; padding: 0.28rem 0.5rem; font-size: 0.85rem; background: var(--surface); }
+.composer-feedback {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--offline);
+}
+
+@media (max-width: 560px) {
+  .home-title { font-size: 1.6rem; }
+  .composer-label { flex: 0 0 100%; }
+}
+
+/* ── Room scene: monitor cursor blink (ambient, CSS-only) ────────────────── */
+
+.scene-cursor { animation: sceneCursor 1.1s steps(1, end) infinite; }
+@keyframes sceneCursor {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
 }

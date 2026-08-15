@@ -1,9 +1,10 @@
 /**
- * End-of-shift summary, shown after a manual end or the 12h auto clock-out.
+ * End-of-day summary, shown after a manual wrap-up or the 12h auto wrap-up.
  */
 
 import { useEffect, useRef } from 'react';
 import { BREAK_LABELS, formatDateLabel, formatHM, type BreakKey, type ShiftSummary } from '../core';
+import { countUp, modalEnter, useFxLayoutEffect } from '../fx';
 
 const BREAK_ORDER: BreakKey[] = ['break1', 'break2', 'lunch'];
 
@@ -14,6 +15,14 @@ export interface SummaryModalProps {
 
 export function SummaryModal({ summary, onClose }: SummaryModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const totalRef = useRef<HTMLSpanElement>(null);
+
+  // Entrance: card rises in, sections cascade behind it, the total rolls up.
+  useFxLayoutEffect(() => {
+    modalEnter(cardRef.current, '.summary-stat, .summary-breaks, .summary-points');
+    countUp(totalRef.current, summary.totalPoints, { prefix: '+' });
+  }, []);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -29,6 +38,7 @@ export function SummaryModal({ summary, onClose }: SummaryModalProps) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
+        ref={cardRef}
         className="modal card"
         role="dialog"
         aria-modal="true"
@@ -36,25 +46,25 @@ export function SummaryModal({ summary, onClose }: SummaryModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="summary-title" className="modal-title">
-          Shift complete
+          Day complete
         </h2>
         <p className="muted">{formatDateLabel(summary.date)}</p>
 
         <div className="summary-grid">
           <div className="summary-stat">
-            <span className="summary-stat-label">Worked</span>
+            <span className="summary-stat-label">In flow</span>
             <span className="summary-stat-value tone-work">{formatHM(summary.workedMs)}</span>
           </div>
           <div className="summary-stat">
-            <span className="summary-stat-label">Offline</span>
+            <span className="summary-stat-label">Away</span>
             <span className="summary-stat-value tone-offline">{formatHM(summary.offlineMs)}</span>
           </div>
           <div className="summary-stat">
-            <span className="summary-stat-label">Tasks</span>
+            <span className="summary-stat-label">Wins</span>
             <span className="summary-stat-value">{summary.taskCount}</span>
           </div>
           <div className="summary-stat">
-            <span className="summary-stat-label">Clean shift</span>
+            <span className="summary-stat-label">Smooth day</span>
             <span className="summary-stat-value">{summary.clean ? 'Yes ✓' : 'No'}</span>
           </div>
         </div>
@@ -72,15 +82,15 @@ export function SummaryModal({ summary, onClose }: SummaryModalProps) {
           <h3>Points earned</h3>
           <ul className="points-lines">
             <li>
-              <span>Worked time</span>
+              <span>Time in flow</span>
               <span className="mono">+{points.workedPoints}</span>
             </li>
             <li className={summary.clean ? '' : 'line-muted'}>
-              <span>Clean-shift bonus</span>
+              <span>Smooth-day bonus</span>
               <span className="mono">+{points.cleanBonus}</span>
             </li>
             <li className={points.taskBonus ? '' : 'line-muted'}>
-              <span>3+ tasks bonus</span>
+              <span>3+ wins bonus</span>
               <span className="mono">+{points.taskBonus}</span>
             </li>
             {summary.perfectWeekBonus > 0 && (
@@ -91,7 +101,8 @@ export function SummaryModal({ summary, onClose }: SummaryModalProps) {
             )}
             <li className="points-total">
               <span>Total</span>
-              <span className="mono tone-points">+{summary.totalPoints}</span>
+              {/* countUp owns this span's text during the roll-up; keep it a single number */}
+              <span className="mono tone-points" ref={totalRef}>+{summary.totalPoints}</span>
             </li>
           </ul>
           <p className="muted balance-line">

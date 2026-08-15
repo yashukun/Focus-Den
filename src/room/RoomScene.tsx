@@ -15,9 +15,9 @@
  * - A gentle vignette + a glow behind the character pull the eye to the avatar
  *   (hero) → desk → décor → background.
  *
- * Animated items (glow outfit, string lights, desk cat, rain window) use small
- * CSS-keyframe motion defined in styles.css and freeze to a static frame under
- * `prefers-reduced-motion`.
+ * Animated items (glow outfit, string lights, desk cat, rain window, the
+ * monitor cursor) use small CSS-keyframe motion defined in styles.css and
+ * freeze to a static frame under `prefers-reduced-motion`.
  */
 
 import { useId } from 'react';
@@ -36,7 +36,14 @@ const WOOD = '#9c6b43';
 const WOOD_HI = '#b58455';
 const WOOD_DK = '#7c5433';
 const HAIR = '#4a3525';
+const HAIR_DK = '#38271b';
+const SKIN = '#e3b591';
+const SKIN_DK = '#d0a67f';
 const SHADOW = '#241a10'; // warm-black contact shadow
+const TRIM = '#7c6a4e'; // baseboard / skirting
+const TRIM_HI = '#93805f';
+const CURTAIN = '#7d9a6f';
+const CURTAIN_DK = '#69855c';
 
 const OUTFITS: Record<string, { body: string; shade: string }> = {
   outfit_hoodie: { body: '#6f9e6f', shade: '#5c8a5c' },
@@ -48,6 +55,14 @@ const OUTFITS: Record<string, { body: string; shade: string }> = {
 
 const BULBS = [12, 28, 44, 60, 76, 92, 108, 124, 140, 152];
 const BULB_COLORS = ['#ffd97d', '#ff9f7d', '#9fe0ff', '#c2ff9f', '#ffb3e6'];
+
+/** Staggered plank seams: [y of row top, seam xs] for each plank row. */
+const PLANK_SEAMS: [number, number[]][] = [
+  [100, [40, 104]],
+  [112, [20, 76, 132]],
+  [124, [52, 116]],
+  [136, [30, 92]],
+];
 
 /** A soft contact shadow that grounds an object (smooth, not pixelated). */
 function ContactShadow(props: { cx: number; cy: number; rx: number; ry: number; opacity?: number }) {
@@ -84,6 +99,7 @@ export function RoomScene({
   const isGlow = equipped.outfit === 'outfit_glow';
   const hair = equipped.hair;
   const acc = equipped.accessory;
+  const raining = has('room_rain');
 
   return (
     <svg
@@ -107,7 +123,7 @@ export function RoomScene({
           <stop offset="100%" stopColor="#1c1206" stopOpacity="0.07" />
         </linearGradient>
         <linearGradient id={ref('floorShade')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#000000" stopOpacity="0.09" />
+          <stop offset="0%" stopColor="#000000" stopOpacity="0.11" />
           <stop offset="100%" stopColor="#000000" stopOpacity="0" />
         </linearGradient>
         {/* Ambient glows — drawn BEHIND the avatar so the pixels stay crisp */}
@@ -133,33 +149,68 @@ export function RoomScene({
       <rect x="0" y="0" width="160" height="100" fill="var(--scene-wall)" />
       <rect x="0" y="0" width="160" height="100" fill={`url(#${ref('wallShade')})`}
         shapeRendering="geometricPrecision" />
+      {/* corner falloff so the wall reads as a room, not a backdrop */}
+      <rect x="0" y="0" width="7" height="100" fill="#000000" opacity="0.05"
+        shapeRendering="geometricPrecision" />
+      <rect x="153" y="0" width="7" height="100" fill="#000000" opacity="0.05"
+        shapeRendering="geometricPrecision" />
+
       <rect x="0" y="100" width="160" height="44" fill="var(--scene-floor)" />
       <rect x="0" y="100" width="160" height="44" fill={`url(#${ref('floorShade')})`}
         shapeRendering="geometricPrecision" />
-      <rect x="0" y="98" width="160" height="2" fill="#00000022" />
+
+      {/* skirting board along the wall/floor seam */}
+      <rect x="0" y="95" width="160" height="5" fill={TRIM} />
+      <rect x="0" y="95" width="160" height="1" fill={TRIM_HI} />
+      <rect x="0" y="99" width="160" height="1" fill="#00000033" />
+
+      {/* wooden planks: rows, staggered seams, a few knots */}
       <rect x="0" y="112" width="160" height="1" fill="var(--scene-floor-2)" />
       <rect x="0" y="124" width="160" height="1" fill="var(--scene-floor-2)" />
       <rect x="0" y="136" width="160" height="1" fill="var(--scene-floor-2)" />
+      {PLANK_SEAMS.map(([rowY, xs]) =>
+        xs.map((x) => (
+          <rect key={`${rowY}-${x}`} x={x} y={rowY + 1} width="1" height="11"
+            fill="var(--scene-floor-2)" opacity="0.75" />
+        )),
+      )}
+      <rect x="64" y="118" width="2" height="1" fill="var(--scene-floor-2)" />
+      <rect x="110" y="130" width="2" height="1" fill="var(--scene-floor-2)" />
+      <rect x="36" y="106" width="2" height="1" fill="var(--scene-floor-2)" />
 
       {/* Cool daylight spill from the window onto the floor (upper-left source) */}
       <polygon points="10,100 58,100 78,144 0,144" fill="#bcd6f0" opacity="0.10"
         shapeRendering="geometricPrecision" />
 
-      {/* ── Window (+ rain if owned) ─────────────────────────────────── */}
+      {/* ── Window (+ curtains, view, rain if owned) ─────────────────── */}
       <g>
+        {/* frame */}
         <rect x="16" y="18" width="42" height="34" fill="#6b5d44" />
         <rect x="15" y="17" width="44" height="2" fill="#7c6c50" />
+        <rect x="17" y="19" width="40" height="1" fill="#59492f" />
+        {/* glass */}
         <rect
           x="19"
           y="21"
           width="36"
           height="28"
-          fill={has('room_rain') ? '#26354f' : 'var(--scene-window-sky)'}
+          fill={raining ? '#26354f' : 'var(--scene-window-sky)'}
         />
+        {/* the view: soft hills + clouds (silhouettes at night, hidden in rain) */}
+        {!raining && (
+          <g clipPath={`url(#${ref('window-clip')})`}>
+            <rect x="19" y="43" width="36" height="6" fill="#7da06b" opacity="0.8" />
+            <rect x="19" y="41" width="14" height="2" fill="#7da06b" opacity="0.55" />
+            <rect x="40" y="41" width="15" height="2" fill="#7da06b" opacity="0.55" />
+            <rect x="24" y="26" width="7" height="2" fill="#ffffff" opacity="0.5" />
+            <rect x="26" y="24" width="4" height="2" fill="#ffffff" opacity="0.5" />
+            <rect x="43" y="30" width="8" height="2" fill="#ffffff" opacity="0.4" />
+          </g>
+        )}
         {/* glass top highlight */}
         <rect x="19" y="21" width="36" height="7" fill="#ffffff" opacity="0.08"
           shapeRendering="geometricPrecision" />
-        {has('room_rain') && (
+        {raining && (
           <g clipPath={`url(#${ref('window-clip')})`}>
             {[20, 27, 34, 41, 48].map((x, i) => (
               <rect
@@ -176,9 +227,39 @@ export function RoomScene({
             ))}
           </g>
         )}
+        {/* muntins */}
         <rect x="35" y="21" width="2" height="28" fill="#6b5d44" />
         <rect x="19" y="34" width="36" height="2" fill="#6b5d44" />
+        {/* sill + brackets + a tiny succulent */}
         <rect x="14" y="52" width="46" height="3" fill="#5b4d36" />
+        <rect x="14" y="52" width="46" height="1" fill="#6f5f42" />
+        <rect x="17" y="55" width="2" height="2" fill="#4a3e2c" />
+        <rect x="55" y="55" width="2" height="2" fill="#4a3e2c" />
+        <rect x="22" y="48" width="4" height="2" fill="#5f9a5f" />
+        <rect x="23" y="46" width="2" height="2" fill="#6fae6f" />
+        <rect x="21" y="50" width="6" height="2" fill="#b5654a" />
+        {/* curtain rod + panels */}
+        <rect x="11" y="15" width="53" height="2" fill="#5b4d36" />
+        <rect x="10" y="14" width="2" height="3" fill="#4a3e2c" />
+        <rect x="63" y="14" width="2" height="3" fill="#4a3e2c" />
+        <rect x="12" y="17" width="6" height="37" fill={CURTAIN} />
+        <rect x="14" y="17" width="1" height="37" fill={CURTAIN_DK} />
+        <rect x="16" y="17" width="1" height="37" fill={CURTAIN_DK} />
+        <rect x="12" y="52" width="6" height="2" fill={CURTAIN_DK} />
+        <rect x="57" y="17" width="6" height="37" fill={CURTAIN} />
+        <rect x="59" y="17" width="1" height="37" fill={CURTAIN_DK} />
+        <rect x="61" y="17" width="1" height="37" fill={CURTAIN_DK} />
+        <rect x="57" y="52" width="6" height="2" fill={CURTAIN_DK} />
+      </g>
+
+      {/* ── Sticky notes above the desk ──────────────────────────────── */}
+      <g>
+        <rect x="68" y="36" width="5" height="5" fill="#ffd97d" />
+        <rect x="68" y="40" width="5" height="1" fill="#d9b355" />
+        <rect x="76" y="37" width="5" height="5" fill="#ffb3c1" />
+        <rect x="76" y="41" width="5" height="1" fill="#d98d9e" />
+        <rect x="69" y="38" width="3" height="1" fill="#a8843d" opacity="0.6" />
+        <rect x="77" y="39" width="3" height="1" fill="#a8626f" opacity="0.6" />
       </g>
 
       {/* ── Wall posters (owned) ─────────────────────────────────────── */}
@@ -240,15 +321,31 @@ export function RoomScene({
         </g>
       )}
 
-      {/* ── Desk (with grounding shadow) ─────────────────────────────── */}
+      {/* ── Desk (top, grain, left leg, drawer pedestal) ─────────────── */}
       <ellipse cx="80" cy="117" rx="58" ry="5" fill={SHADOW} opacity="0.12"
         shapeRendering="geometricPrecision" />
       <g>
         <rect x="28" y="86" width="104" height="8" fill={WOOD} />
         <rect x="28" y="86" width="104" height="2" fill={WOOD_HI} />
         <rect x="28" y="92" width="104" height="2" fill={WOOD_DK} opacity="0.6" />
+        {/* grain */}
+        <rect x="44" y="89" width="8" height="1" fill={WOOD_DK} opacity="0.5" />
+        <rect x="96" y="90" width="10" height="1" fill={WOOD_DK} opacity="0.45" />
+        <rect x="34" y="90" width="5" height="1" fill={WOOD_DK} opacity="0.4" />
+        {/* left leg */}
         <rect x="34" y="94" width="6" height="22" fill={WOOD_DK} />
-        <rect x="120" y="94" width="6" height="22" fill={WOOD_DK} />
+        <rect x="34" y="94" width="2" height="22" fill="#8a5f3b" />
+        <rect x="33" y="114" width="8" height="2" fill="#5f3f26" />
+        {/* drawer pedestal */}
+        <rect x="110" y="94" width="22" height="24" fill={WOOD_DK} />
+        <rect x="110" y="94" width="22" height="1" fill="#8a5f3b" />
+        <rect x="112" y="97" width="18" height="7" fill={WOOD} />
+        <rect x="112" y="97" width="18" height="1" fill={WOOD_HI} />
+        <rect x="112" y="106" width="18" height="7" fill={WOOD} />
+        <rect x="112" y="106" width="18" height="1" fill={WOOD_HI} />
+        <rect x="120" y="100" width="3" height="2" fill="#3a2d1f" />
+        <rect x="120" y="109" width="3" height="2" fill="#3a2d1f" />
+        <rect x="110" y="115" width="22" height="3" fill="#5f3f26" />
       </g>
 
       {/* ── Dual monitor (owned, left of main) ───────────────────────── */}
@@ -264,17 +361,32 @@ export function RoomScene({
         </g>
       )}
 
-      {/* ── Main monitor ─────────────────────────────────────────────── */}
+      {/* ── Main monitor (syntax-tinted code + blinking cursor) ──────── */}
       <g>
         <rect x="76" y="78" width="8" height="8" fill="#3b3b42" />
         <rect x="70" y="84" width="20" height="2" fill="#3b3b42" />
         <rect x="54" y="46" width="52" height="34" fill="#2a2a30" />
         <rect x="55" y="47" width="50" height="1" fill="#43434c" />
         <rect x="57" y="49" width="46" height="28" fill="#4f8fd0" />
-        <rect x="60" y="53" width="22" height="2" fill="#bfe0ff" />
-        <rect x="60" y="58" width="32" height="2" fill="#9ccaf5" />
-        <rect x="60" y="63" width="16" height="2" fill="#bfe0ff" />
-        <rect x="60" y="68" width="26" height="2" fill="#9ccaf5" />
+        {/* code: keyword / string / plain tints */}
+        <rect x="60" y="53" width="9" height="2" fill="#e3c1f0" />
+        <rect x="71" y="53" width="13" height="2" fill="#bfe0ff" />
+        <rect x="60" y="58" width="6" height="2" fill="#ffe0a3" />
+        <rect x="68" y="58" width="22" height="2" fill="#9ccaf5" />
+        <rect x="63" y="63" width="12" height="2" fill="#b8ecc4" />
+        <rect x="77" y="63" width="8" height="2" fill="#bfe0ff" />
+        <rect x="60" y="68" width="8" height="2" fill="#9ccaf5" />
+        <rect x="70" y="68" width="16" height="2" fill="#bfe0ff" />
+        <rect className="scene-cursor" x="60" y="72" width="2" height="3" fill="#eaf4ff" />
+        {/* power LED */}
+        <rect x="101" y="78" width="2" height="1" fill="#7fdc8f" />
+      </g>
+
+      {/* ── Mousepad + mouse (right of the keyboard spot) ────────────── */}
+      <g>
+        <rect x="100" y="82" width="11" height="4" fill="#39434f" />
+        <rect x="100" y="82" width="11" height="1" fill="#4a5665" />
+        <rect x="104" y="83" width="4" height="2" fill="#e7e2d8" />
       </g>
 
       {/* ── Coffee mug (owned) ───────────────────────────────────────── */}
@@ -323,16 +435,28 @@ export function RoomScene({
         shapeRendering="geometricPrecision" />
 
       {/* ── Character (hero) — grounded, with a gentle scale-up ───────── */}
-      <ellipse cx="80" cy="104" rx="22" ry="4.5" fill={SHADOW} opacity="0.2"
+      <ellipse cx="80" cy="112" rx="20" ry="4" fill={SHADOW} opacity="0.18"
         shapeRendering="geometricPrecision" />
       <g className="scene-character">
-        {/* chair */}
+        {/* chair: back, headrest, armrests, post + star base */}
+        <rect x="78" y="104" width="4" height="6" fill="#3f342a" />
+        <rect x="70" y="110" width="20" height="2" fill="#3f342a" />
+        <rect x="69" y="111" width="2" height="2" fill="#2a221a" />
+        <rect x="89" y="111" width="2" height="2" fill="#2a221a" />
         <rect x="66" y="72" width="28" height="32" fill="#5b4a3a" />
+        <rect x="66" y="72" width="2" height="32" fill="#6b5847" />
         <rect x="66" y="72" width="28" height="2" fill="#6b5847" />
         <rect x="68" y="70" width="24" height="6" fill="#6b5847" />
+        <rect x="63" y="86" width="3" height="12" fill="#4a3c2e" />
+        <rect x="63" y="86" width="3" height="2" fill="#5b4a3a" />
+        <rect x="94" y="86" width="3" height="12" fill="#4a3c2e" />
+        <rect x="94" y="86" width="3" height="2" fill="#5b4a3a" />
 
         {/* long hair back panel (behind torso) */}
         {hair === 'hair_long' && <rect x="70" y="68" width="20" height="22" fill={HAIR} />}
+
+        {/* neck (covered by the hood when a hoodie is on) */}
+        <rect x="77" y="76" width="6" height="5" fill={SKIN_DK} />
 
         {/* hood (hoodie) */}
         {isHoodie && <rect x="71" y="76" width="18" height="8" fill={outfit.shade} />}
@@ -341,6 +465,12 @@ export function RoomScene({
         <rect x="68" y="82" width="24" height="9" fill={outfit.body} />
         <rect x="70" y="80" width="20" height="24" fill={outfit.body} />
         <rect x="70" y="80" width="20" height="2" fill={outfit.shade} />
+        <rect x="70" y="101" width="20" height="3" fill={outfit.shade} />
+        {/* arms resting at the sides */}
+        <rect x="66" y="84" width="4" height="14" fill={outfit.shade} />
+        <rect x="66" y="84" width="4" height="2" fill={outfit.body} />
+        <rect x="90" y="84" width="4" height="14" fill={outfit.shade} />
+        <rect x="90" y="84" width="4" height="2" fill={outfit.body} />
         {/* outfit details */}
         {isBlazer && (
           <>
@@ -356,12 +486,13 @@ export function RoomScene({
         )}
 
         {/* head */}
-        <rect x="73" y="64" width="14" height="14" fill="#e3b591" />
+        <rect x="73" y="64" width="14" height="14" fill={SKIN} />
 
         {/* base hair (skipped under a cap) */}
         {acc !== 'acc_cap' && (
           <>
             <rect x="72" y="62" width="16" height="7" fill={HAIR} />
+            <rect x="72" y="67" width="16" height="2" fill={HAIR_DK} />
             <rect x="72" y="68" width="2" height="6" fill={HAIR} />
             <rect x="86" y="68" width="2" height="6" fill={HAIR} />
           </>
@@ -390,8 +521,10 @@ export function RoomScene({
         {acc === 'acc_headphones' && (
           <g>
             <rect x="71" y="61" width="18" height="3" fill="#222" />
+            <rect x="74" y="60" width="12" height="1" fill="#3a3a3a" />
             <rect x="69" y="64" width="4" height="9" fill="#222" />
             <rect x="87" y="64" width="4" height="9" fill="#222" />
+            <rect x="69" y="64" width="1" height="9" fill="#3a3a3a" />
           </g>
         )}
         {/* accessory: glasses (temple arms visible from behind) */}

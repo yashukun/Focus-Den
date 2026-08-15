@@ -42,10 +42,10 @@ export const BREAK_LIMITS: Record<BreakKey, number> = {
   lunch: 50 * MINUTE_MS,
 };
 
-/** Human labels for each break. */
+/** Human labels for each breather (ids stay break1/break2/lunch — persisted). */
 export const BREAK_LABELS: Record<BreakKey, string> = {
-  break1: 'Break 1',
-  break2: 'Break 2',
+  break1: 'Stretch',
+  break2: 'Recharge',
   lunch: 'Lunch',
 };
 

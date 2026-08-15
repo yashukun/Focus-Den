@@ -5,23 +5,23 @@
 ```bash
 # Node ≥ 22.5 required (node:sqlite). `nvm use` picks it up from .nvmrc.
 npm install && npm install --prefix server
-npm run dev:all        # → open http://localhost:5173
+npm run dev            # → open http://localhost:5173
 ```
 
-Two processes in dev: **Vite** (5173, the app with hot reload — the one you
-open) and the **API** (8787, Fastify + SQLite — Vite proxies `/api` to it).
-Deployed, there's only one: the server serves the built frontend itself.
+The app is fully local (no accounts, no sync) — dev is just Vite with hot
+reload. The Fastify server exists to serve the built frontend on a deployed
+box; `npm run dev:all` runs both when you're working on that setup.
 
 ## Commands
 
 | Command | What |
 |---|---|
-| `npm run dev:all` | frontend + API together (dev) |
+| `npm run dev` | the app with hot reload |
+| `npm run dev:all` | frontend + server together |
 | `npm run check` | everything CI runs: both typechecks + both test suites |
 | `npm test` / `npm test --prefix server` | frontend / server tests |
 | `npm run test:watch` | frontend tests on save |
 | `npm run build` | typecheck + production bundle → `dist/` |
-| `npm --prefix server run reset-password -- <name> <pw>` | admin password reset (revokes sessions) |
 
 CI (GitHub Actions) runs typecheck + tests + build + a production-dependency
 audit on every push/PR to `main`.
@@ -35,15 +35,18 @@ src/
                shift.ts (state machine) · points.ts · week.ts · plan.ts ·
                items.ts (shop catalog) · coerce.ts (deep validation, shared
                with the server) · types.ts (State — the one persisted doc)
-  state/       Store + persistence + sync. store.ts (actions, sequences core
-               calls) · persist.ts (localStorage) · sync.ts (debounced push,
-               LWW pull, clock calibration) · auth.ts (login + offline cache)
-               · api.ts (typed fetch client)
+  state/       Store + persistence. store.ts (actions, sequences core calls)
+               · persist.ts (localStorage adapter) · hooks.ts (React
+               subscriptions)
+  fx/          One-shot animation effects (anime.js) + React hooks. Fire-and-
+               forget, no-op under prefers-reduced-motion; ambient loops stay
+               CSS keyframes in styles.css.
   components/  One file per screen/overlay. statusMeta.ts maps status → UI.
   room/        The pixel-SVG scene (cosmetics + props render here).
   audio.ts     All sound, synthesized — no audio files.
 
-server/src/
+server/src/    (static host for the built app; the routes below are the
+                sync-era API the current client no longer calls)
   app.ts       All routes. Validates every doc with the SAME coerceState the
                client uses (imported from ../../src/core).
   auth.ts      scrypt hashing + hand-rolled HS256 JWT (tv claim = revocation).
@@ -57,7 +60,7 @@ server/src/
 1. **`core/` never reads the clock or storage.** Pass `now` in. This is why
    the engine is deterministic and the tests need no mocks.
 2. **All state changes flow through `store.ts`** → core function → new
-   immutable state → `setState` (persists + schedules sync + notifies React).
+   immutable state → `setState` (persists + notifies React).
    Never mutate state objects.
 3. **The whole game is one versioned document** (`State`, currently v2).
    Adding fields ⇒ extend `coerceState` (and its hostile-doc tests) so old and
@@ -72,7 +75,8 @@ server/src/
    and covered there.
 6. **No new runtime dependencies without a reason** — the app is deliberately
    zero-asset (SVG + WebAudio) and the server is 5 packages. Every dependency
-   is attack surface and upgrade debt.
+   is attack surface and upgrade debt. The one frontend extra is animejs,
+   used only by `src/fx` for one-shot effects.
 
 ## Adding things (worked examples)
 
@@ -85,6 +89,12 @@ server/src/
 - **A server route:** add to `app.ts` with `preHandler: requireAuth`, keep it
   a thin store call, and add a test in `server/test/app.test.ts` (it runs
   against both engines automatically).
+- **A one-shot animation:** use a hook from `src/fx` for the common cases
+  (`useBumpOnChange`, `useCelebrateOnIncrease` — both return a callback ref),
+  or compose named effects inside `useFxLayoutEffect` for bespoke sequences
+  (see `WeekStreak.tsx`). New effects go in `fx/effects.ts` and follow its
+  contract comment: fire-and-forget, null-safe, reduced-motion-gated,
+  transform/opacity only.
 
 ## Deploying
 

@@ -1,5 +1,5 @@
 /**
- * History — past completed shift days, the current week's streak (with streak-
+ * Journal — past completed days, the current week's streak (with streak-
  * freeze application), and lightweight analytics charts.
  */
 
@@ -35,7 +35,7 @@ export function History({ state, now }: HistoryProps) {
 
   return (
     <div className="history">
-      <h1>History</h1>
+      <h1>Journal</h1>
 
       <section className="card">
         <div className="card-head">
@@ -53,7 +53,7 @@ export function History({ state, now }: HistoryProps) {
           <div className="card-head"><h2>Analytics</h2></div>
           <div className="charts">
             <div className="chart-block">
-              <h3 className="chart-title">Worked hours · this week</h3>
+              <h3 className="chart-title">Hours in flow · this week</h3>
               <WeekHoursChart history={state.history} weekKey={currentWeekKey} />
             </div>
             <div className="chart-block">
@@ -61,7 +61,7 @@ export function History({ state, now }: HistoryProps) {
               <PointsChart history={state.history} />
             </div>
             <div className="chart-block">
-              <h3 className="chart-title">Break budget · last shift</h3>
+              <h3 className="chart-title">Breather budget · last day</h3>
               <BreakUsageChart history={state.history} />
             </div>
           </div>
@@ -70,23 +70,23 @@ export function History({ state, now }: HistoryProps) {
 
       <section className="card">
         <div className="card-head">
-          <h2>Past shifts</h2>
+          <h2>Past days</h2>
           <span className="muted">{rows.length} day{rows.length === 1 ? '' : 's'}</span>
         </div>
 
         {rows.length === 0 ? (
-          <p className="muted empty">No completed shifts yet. Clock in to start your record.</p>
+          <p className="muted empty">No completed days yet. Settle in to start your journal.</p>
         ) : (
           <div className="table-wrap">
             <table className="history-table">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Worked</th>
-                  <th>Breaks</th>
-                  <th>Offline</th>
-                  <th>Tasks</th>
-                  <th>Clean</th>
+                  <th>In flow</th>
+                  <th>Breathers</th>
+                  <th>Away</th>
+                  <th>Wins</th>
+                  <th>Smooth</th>
                   <th className="num">Points</th>
                 </tr>
               </thead>

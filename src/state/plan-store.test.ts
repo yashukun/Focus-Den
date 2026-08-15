@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { addDays, dateString, isDateEditable, ticketsFor, weekDates } from '../core';
-import { signup } from './auth';
 import { store } from './store';
 
 function installStorage() {
@@ -18,32 +17,30 @@ function installStorage() {
   } as Storage;
 }
 
-// Stub the backend so signup works (auth is API-backed); state endpoints 404 so
-// the background pull/push no-op — this test only exercises the store's copy logic.
-function installFetch() {
-  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-    const body = init?.body ? JSON.parse(String(init.body)) : {};
-    if (String(url).endsWith('/api/auth/signup')) {
-      const id = String(body.name).trim().toLowerCase();
-      return { ok: true, status: 200, json: async () => ({ token: `t.${id}`, userId: id, name: body.name }) } as unknown as Response;
-    }
-    return { ok: false, status: 404, json: async () => ({ error: 'nf' }) } as unknown as Response;
-  });
-}
-
-let seq = 0;
-
-beforeEach(async () => {
+beforeEach(() => {
   installStorage();
-  installFetch();
-  const res = await signup(`user${seq}`, 'pass1234');
-  seq += 1;
-  if (res.userId) store.signIn(res.userId);
+  store.resetAll(); // fresh state between tests
 });
 
 afterEach(() => {
-  store.signOut(); // clears the debounced sync timer + resets state between tests
-  vi.unstubAllGlobals();
+  delete (globalThis as { localStorage?: Storage }).localStorage;
+});
+
+describe('store: adding intentions', () => {
+  it('rejects duplicate titles on the same day (case-insensitive)', () => {
+    const today = dateString(Date.now());
+    expect(store.addPlanTicket(today, { title: 'Read a chapter' })).toBe('added');
+    expect(store.addPlanTicket(today, { title: '  read a CHAPTER ' })).toBe('duplicate');
+    expect(ticketsFor(store.getState().plan, today)).toHaveLength(1);
+    // Same title on another day is fine.
+    expect(store.addPlanTicket(addDays(today, 1), { title: 'Read a chapter' })).toBe('added');
+  });
+
+  it('rejects empty titles and locked days', () => {
+    const today = dateString(Date.now());
+    expect(store.addPlanTicket(today, { title: '   ' })).toBe('invalid');
+    expect(store.addPlanTicket(addDays(today, -1), { title: 'Too late' })).toBe('invalid');
+  });
 });
 
 describe('store: plan duplication', () => {

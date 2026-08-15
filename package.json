@@ -1,7 +1,7 @@
 {
   "name": "focus-den",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "Focus Den — a single-user, focus-driven shift tracker with a cozy pixel room.",
   "engines": {
@@ -19,6 +19,7 @@
     "check": "npm run typecheck && npm --prefix server run typecheck && npm test && npm --prefix server test"
   },
   "dependencies": {
+    "animejs": "^4.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

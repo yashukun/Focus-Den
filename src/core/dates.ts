@@ -22,11 +22,6 @@ export function dayIndexMonSat(now: number): number {
   return day === 0 ? -1 : day - 1;
 }
 
-/** True when the instant falls on a Sunday (no shift, excluded from streak). */
-export function isSunday(now: number): boolean {
-  return new Date(now).getDay() === 0;
-}
-
 /** Local YYYY-MM-DD of the Monday that starts this instant's week. */
 export function weekKey(now: number): string {
   const d = new Date(now);

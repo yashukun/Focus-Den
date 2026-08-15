@@ -1,9 +1,10 @@
 /**
- * Dashboard — the home screen. Shows the live status + timer, shift progress,
- * the status switcher, break budgets, the task log, the points balance with a
- * live "earned today" preview, the weekly streak, and a room preview.
+ * Today — the main screen of the den. Shows the live status + timer, the day's
+ * progress, the status switcher, breather budgets, the wins log, the points
+ * balance with a live "gathered today" preview, the weekly streak, and a room
+ * preview.
  *
- * Three macro modes: ready-to-clock-in, active shift, and done-for-today.
+ * Three macro modes: ready-to-settle-in, mid-day, and done-for-today.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -40,8 +41,8 @@ import { RoomScene } from '../room/RoomScene';
 import { STATUS_META } from './statusMeta';
 import { WeekStreak } from './WeekStreak';
 
-// Offline is intentionally absent: it's reached only automatically when a
-// break overruns its grace. You resume from it by tapping Working.
+// Away is intentionally absent: it's reached only automatically when a
+// breather overruns its grace. You resume from it by tapping In flow.
 const SWITCH_ORDER: { status: Status; key?: BreakKey }[] = [
   { status: 'working' },
   { status: 'break1', key: 'break1' },
@@ -118,16 +119,17 @@ export function Dashboard({ state, now, onGoToRoom }: DashboardProps) {
 function ReadyCard({ balance }: { balance: number }) {
   return (
     <section className="card hero-card">
-      <h1 className="hero-title">Ready to focus?</h1>
+      <h1 className="hero-title">Your den is ready</h1>
       <p className="muted">
-        Clock in to start your 12-hour shift. Stay in <strong>Working</strong> to earn points.
+        Settle in when you feel it. The day unfolds on its own from there — time spent{' '}
+        <strong>In flow</strong> gathers points for your den.
       </p>
       <button
         className="btn btn-primary btn-xl"
         data-sound="start"
         onClick={() => store.clockIn(Date.now())}
       >
-        Clock in
+        Settle in
       </button>
       <p className="muted balance-line">
         Balance: <strong className="mono tone-points">{balance}</strong> pts
@@ -143,12 +145,12 @@ function DoneCard({ state }: { state: State }) {
   const entry = [...state.history].reverse().find((h) => h.date === today);
   return (
     <section className="card hero-card">
-      <h1 className="hero-title">Shift complete 🌙</h1>
-      <p className="muted">You're done for today. The next shift unlocks tomorrow.</p>
+      <h1 className="hero-title">Day complete 🌙</h1>
+      <p className="muted">That’s a wrap — your den rests until tomorrow.</p>
       {entry && (
         <div className="summary-grid">
           <div className="summary-stat">
-            <span className="summary-stat-label">Worked</span>
+            <span className="summary-stat-label">In flow</span>
             <span className="summary-stat-value tone-work">{formatHM(entry.worked)}</span>
           </div>
           <div className="summary-stat">
@@ -156,11 +158,11 @@ function DoneCard({ state }: { state: State }) {
             <span className="summary-stat-value tone-points">+{entry.points}</span>
           </div>
           <div className="summary-stat">
-            <span className="summary-stat-label">Tasks</span>
+            <span className="summary-stat-label">Wins</span>
             <span className="summary-stat-value">{entry.tasks}</span>
           </div>
           <div className="summary-stat">
-            <span className="summary-stat-label">Clean</span>
+            <span className="summary-stat-label">Smooth day</span>
             <span className="summary-stat-value">{entry.clean ? 'Yes ✓' : 'No'}</span>
           </div>
         </div>
@@ -172,7 +174,7 @@ function DoneCard({ state }: { state: State }) {
   );
 }
 
-// ── Active shift ─────────────────────────────────────────────────────────────
+// ── Mid-day (settled in) ─────────────────────────────────────────────────────
 
 function ActiveShift({ state, now }: { state: State; now: number }) {
   const { shift } = state;
@@ -200,8 +202,8 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
     if (!warn || notifiedFor.current === currentBreak) return;
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
-        new Notification('Break almost over', {
-          body: `${BREAK_LABELS[currentBreak]} hits its limit soon — tap Working to stay clean.`,
+        new Notification('Breather almost done', {
+          body: `${BREAK_LABELS[currentBreak]} reaches its limit soon — tap In flow to keep the day smooth.`,
         });
       } catch {
         // notifications unavailable
@@ -211,7 +213,7 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
   }, [warn, currentBreak]);
 
   function onEnd() {
-    if (window.confirm('End your shift now? This finalizes today’s points.')) {
+    if (window.confirm('Wrap up the day? This locks in today’s points.')) {
       store.endShift(Date.now());
     }
   }
@@ -228,19 +230,19 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
         </div>
         {shift.status === 'offline' && !shift.clean && (
           <p className="status-note">
-            A break overran its limit — you were moved to Offline. Tap{' '}
-            <strong>Working</strong> to resume earning.
+            A breather ran long, so you drifted <strong>Away</strong>. Tap{' '}
+            <strong>In flow</strong> when you’re back.
           </p>
         )}
         {shift.status === 'offline' && shift.clean && (
-          <p className="status-note">Offline — worked time is paused. Tap Working to resume.</p>
+          <p className="status-note">Away — the flow clock is paused. Tap In flow to resume.</p>
         )}
 
         {warn && currentBreak && (
           <div className="grace-warning" role="alert">
             <span>
               ⚠ {BREAK_LABELS[currentBreak]} ends in {formatMS(toThreshold)} — tap{' '}
-              <strong>Working</strong> to stay clean.
+              <strong>In flow</strong> to keep the day smooth.
             </span>
             {typeof Notification !== 'undefined' && Notification.permission === 'default' && (
               <button
@@ -254,7 +256,7 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
           </div>
         )}
 
-        {/* Shift progress */}
+        {/* Day progress */}
         <div className="progress">
           <div className="progress-track">
             <div
@@ -264,7 +266,7 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(progress.fraction * 100)}
-              aria-label="Shift progress"
+              aria-label="Day progress"
             />
           </div>
           <div className="progress-labels">
@@ -306,34 +308,30 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
         </div>
 
         <button className="btn btn-danger btn-block" onClick={onEnd}>
-          End shift
+          Wrap up the day
         </button>
 
-        {(state.perks.deepWork || state.perks.soundscape) && (
-          <div className="focus-tools">
-            {state.perks.deepWork && (
-              <button className="btn btn-sm" onClick={() => store.setDeepWork(true)}>
-                ◎ Deep work
-              </button>
-            )}
-            {state.perks.soundscape && (
-              <button
-                className={`btn btn-sm ${state.settings.soundscapeOn ? 'btn-primary' : ''}`}
-                aria-pressed={state.settings.soundscapeOn}
-                onClick={() => store.setSoundscapeOn(!state.settings.soundscapeOn)}
-              >
-                ♪ {state.settings.soundscapeOn ? `${soundscapeName(state)} on` : 'Soundscape'}
-              </button>
-            )}
-          </div>
-        )}
+        <div className="focus-tools">
+          {state.perks.deepWork && (
+            <button className="btn btn-sm" onClick={() => store.setDeepWork(true)}>
+              ◎ Deep work
+            </button>
+          )}
+          <button
+            className={`btn btn-sm ${state.settings.soundscapeOn ? 'btn-primary' : ''}`}
+            aria-pressed={state.settings.soundscapeOn}
+            onClick={() => store.setSoundscapeOn(!state.settings.soundscapeOn)}
+          >
+            ♪ {state.settings.soundscapeOn ? `${soundscapeName(state)} on` : 'Soundscape'}
+          </button>
+        </div>
       </section>
 
-      {/* Break budgets */}
+      {/* Breather budgets */}
       <section className="card">
         <div className="card-head">
-          <h2>Breaks</h2>
-          <span className="muted">{effectiveGrace(graceBonusMs) / 60000}-min grace, then auto-offline</span>
+          <h2>Breathers</h2>
+          <span className="muted">{effectiveGrace(graceBonusMs) / 60000}-min grace, then you drift Away</span>
         </div>
         <div className="break-chips">
           {BREAK_KEYS.map((k) => (
@@ -342,7 +340,7 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
         </div>
       </section>
 
-      {/* Tasks + Points */}
+      {/* Wins + Points */}
       <div className="dash-two">
         <TaskLog shift={shift} />
         <section className="card points-card">
@@ -355,22 +353,22 @@ function ActiveShift({ state, now }: { state: State; now: number }) {
           </div>
           <div className="preview">
             <div className="preview-total mono tone-points">+{preview.subtotal}</div>
-            <div className="preview-label">earned today (preview)</div>
+            <div className="preview-label">gathered today (so far)</div>
             <ul className="points-lines">
               <li>
-                <span>Worked · {formatHM(live.working)}</span>
+                <span>In flow · {formatHM(live.working)}</span>
                 <span className="mono">+{preview.workedPoints}</span>
               </li>
               <li className={shift.clean ? '' : 'line-muted'}>
-                <span>Clean shift</span>
+                <span>Smooth day</span>
                 <span className="mono">+{preview.cleanBonus}</span>
               </li>
               <li className={preview.taskBonus ? '' : 'line-muted'}>
-                <span>3+ tasks ({shift.tasks.length})</span>
+                <span>3+ wins ({shift.tasks.length})</span>
                 <span className="mono">+{preview.taskBonus}</span>
               </li>
             </ul>
-            <p className="muted preview-foot">Finalizes at clock-out.</p>
+            <p className="muted preview-foot">Locks in when you wrap up.</p>
           </div>
         </section>
       </div>
@@ -454,7 +452,7 @@ function TaskLog({ shift }: { shift: State['shift'] }) {
   return (
     <section className="card tasks-card">
       <div className="card-head">
-        <h2>Tasks</h2>
+        <h2>Wins</h2>
         <span className="muted">
           {shift.tasks.length} logged{shift.tasks.length < 3 ? ` · +20 at 3` : ' · +20 ✓'}
         </span>
@@ -465,8 +463,8 @@ function TaskLog({ shift }: { shift: State['shift'] }) {
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="What did you finish?"
-          aria-label="Log a task"
+          placeholder="What did you just finish?"
+          aria-label="Log a win"
           maxLength={120}
         />
         <button className="btn btn-primary" type="submit" disabled={!text.trim()} data-sound="none">
@@ -474,7 +472,7 @@ function TaskLog({ shift }: { shift: State['shift'] }) {
         </button>
       </form>
       {shift.tasks.length === 0 ? (
-        <p className="muted empty">No tasks yet — log what you ship.</p>
+        <p className="muted empty">Nothing yet — log a win, however small.</p>
       ) : (
         <ul className="task-list">
           {ordered.map(({ t, i }) =>
@@ -486,7 +484,7 @@ function TaskLog({ shift }: { shift: State['shift'] }) {
                     type="text"
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
-                    aria-label="Edit task"
+                    aria-label="Edit win"
                     maxLength={120}
                     autoFocus
                   />
@@ -511,7 +509,7 @@ function TaskLog({ shift }: { shift: State['shift'] }) {
                   <button
                     type="button"
                     data-sound="none"
-                    aria-label="Edit task"
+                    aria-label="Edit win"
                     title="Edit"
                     onClick={() => startEdit(i, t.text)}
                   >
@@ -520,7 +518,7 @@ function TaskLog({ shift }: { shift: State['shift'] }) {
                   <button
                     type="button"
                     data-sound="none"
-                    aria-label="Delete task"
+                    aria-label="Delete win"
                     title="Delete"
                     onClick={() => remove(i)}
                   >

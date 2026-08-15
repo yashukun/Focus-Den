@@ -1,14 +1,13 @@
 /**
- * Day Planner — a calendar of predetermined goals/tickets per day (separate
- * from the during-shift task log). Pick a day on the month grid, then add /
- * edit / delete tickets, set a status (To do → In progress → Done), give an
- * optional duration, move a ticket to the next day, or copy a day's tickets to
+ * Plan — a calendar of intentions per day (separate from the during-day wins
+ * log). Pick a day on the month grid, then set intentions with an optional
+ * time goal and priority, move one to the next day, or copy a day's plan to
  * the rest of its week.
  *
  * Rule: current and upcoming days are editable; past days are locked (view only).
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   addDays,
   dateString,
@@ -28,12 +27,13 @@ import {
   type TrackingState,
 } from '../core';
 import { store } from '../state/store';
+import { play } from '../audio';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const STATUSES: { id: TicketStatus; label: string; tone: string }[] = [
   { id: 'todo', label: 'To do', tone: 'idle' },
-  { id: 'in_progress', label: 'In progress', tone: 'break' },
+  { id: 'in_progress', label: 'In focus', tone: 'break' },
   { id: 'done', label: 'Done', tone: 'work' },
 ];
 
@@ -41,6 +41,17 @@ const PRIORITIES: { id: TicketPriority; label: string; tone: string }[] = [
   { id: 'low', label: 'Low', tone: 'break' },
   { id: 'med', label: 'Med', tone: 'points' },
   { id: 'high', label: 'High', tone: 'offline' },
+];
+
+/** Time-goal presets for the composer (minutes; null = no goal). */
+const DURATION_PRESETS: { min: number | null; label: string }[] = [
+  { min: null, label: 'No goal' },
+  { min: 15, label: '15m' },
+  { min: 25, label: '25m' },
+  { min: 45, label: '45m' },
+  { min: 60, label: '1h' },
+  { min: 90, label: '1h 30' },
+  { min: 120, label: '2h' },
 ];
 
 function statusMeta(id: TicketStatus) {
@@ -128,7 +139,7 @@ export function PlanView({ state, now }: PlanViewProps) {
                 key={dateKey}
                 className={cls}
                 aria-pressed={isSelected}
-                aria-label={`${formatDateLabel(dateKey)}, ${tickets.length} ticket${tickets.length === 1 ? '' : 's'}`}
+                aria-label={`${formatDateLabel(dateKey)}, ${tickets.length} intention${tickets.length === 1 ? '' : 's'}`}
                 onClick={() => pick(dateKey)}
                 data-sound="none"
               >
@@ -167,7 +178,7 @@ function DayPanel({
   const editable = isDateEditable(dateKey, todayKey);
   const tickets = ticketsFor(state.plan, dateKey);
   const rel = dateKey === todayKey ? 'Today' : dateKey === addDays(todayKey, 1) ? 'Tomorrow' : null;
-  // Tickets can only be *started* (timed) for today while clocked in & Working.
+  // Intentions can only be *started* (timed) for today while settled in & In flow.
   const startable = dateKey === todayKey && state.shift.status === 'working';
 
   const plural = (n: number) => (n === 1 ? '' : 's');
@@ -176,21 +187,21 @@ function DayPanel({
     const r = store.copyPlanDayToNextDay(dateKey);
     setMsg(
       r.tickets
-        ? `Copied ${r.tickets} ticket${plural(r.tickets)} to tomorrow.`
-        : 'Tomorrow already has these tickets.',
+        ? `Carried ${r.tickets} intention${plural(r.tickets)} to tomorrow.`
+        : 'Tomorrow already has these.',
     );
   }
   function copyWeek() {
     const r = store.copyPlanDayToWeek(dateKey);
     setMsg(
       r.tickets
-        ? `Copied ${r.tickets} ticket${plural(r.tickets)} to ${r.days} upcoming day${plural(r.days)} this week.`
-        : 'Already up to date — no new copies needed.',
+        ? `Carried ${r.tickets} intention${plural(r.tickets)} across ${r.days} upcoming day${plural(r.days)} this week.`
+        : 'Already up to date — nothing new to carry.',
     );
   }
 
   function clearDay() {
-    if (window.confirm(`Clear all ${tickets.length} ticket(s) for ${formatDateLabel(dateKey)}?`)) {
+    if (window.confirm(`Let go of all ${tickets.length} intention(s) for ${formatDateLabel(dateKey)}?`)) {
       store.clearPlanDay(dateKey);
       setMsg(null);
     }
@@ -206,16 +217,18 @@ function DayPanel({
         </div>
       </div>
 
+      {editable && <Composer dateKey={dateKey} />}
+
       {editable && tickets.length > 0 && (
         <>
           <div className="day-actions">
-            <button className="btn btn-sm" onClick={copyNextDay} title="Duplicate these tickets to the next day">
-              Copy → tomorrow
+            <button className="btn btn-sm" onClick={copyNextDay} title="Carry these intentions to the next day">
+              Carry → tomorrow
             </button>
-            <button className="btn btn-sm" onClick={copyWeek} title="Duplicate these tickets to current + upcoming days this week">
-              Copy → week
+            <button className="btn btn-sm" onClick={copyWeek} title="Carry these intentions to current + upcoming days this week">
+              Carry → week
             </button>
-            <button className="btn btn-sm" onClick={clearDay} title="Delete all tickets for this day">
+            <button className="btn btn-sm" onClick={clearDay} title="Remove every intention for this day">
               Clear day
             </button>
           </div>
@@ -223,15 +236,13 @@ function DayPanel({
         </>
       )}
 
-      {editable && <AddTicketForm dateKey={dateKey} />}
-
       {editable && !startable && tickets.length > 0 && dateKey === todayKey && (
-        <p className="muted plan-hint">Clock in and switch to <strong>Working</strong> to start a ticket’s timer.</p>
+        <p className="muted plan-hint">Settle in and be <strong>In flow</strong> to start an intention’s timer.</p>
       )}
 
       {tickets.length === 0 ? (
         <p className="muted empty">
-          {editable ? 'No tickets yet — add a goal for this day.' : 'Nothing was planned for this day.'}
+          {editable ? 'Nothing here yet — set a gentle intention for this day.' : 'Nothing was planned for this day.'}
         </p>
       ) : (
         <ul className="ticket-list">
@@ -250,67 +261,168 @@ function DayPanel({
       )}
 
       {!editable && (
-        <p className="muted day-locked-note">Past days can’t be changed — they’re a record of what you planned.</p>
+        <p className="muted day-locked-note">Past days can’t be changed — they’re a record of what you intended.</p>
       )}
     </section>
   );
 }
 
-function AddTicketForm({ dateKey }: { dateKey: string }) {
+/**
+ * The intention composer. Time goals are preset chips (with a custom escape
+ * hatch), priority is a segmented toggle, notes fold out on demand. Adding
+ * keeps focus in the title so a day can be sketched in one flow; duplicate
+ * titles on the same day are caught with inline feedback instead of piling up.
+ */
+function Composer({ dateKey }: { dateKey: string }) {
   const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState('');
+  const [durationMin, setDurationMin] = useState<number | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [custom, setCustom] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('med');
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  const customMin = Number(custom);
+  const effectiveMin = customOpen
+    ? (Number.isFinite(customMin) && customMin > 0 ? Math.round(customMin) : null)
+    : durationMin;
+
+  function pickPreset(min: number | null) {
+    setCustomOpen(false);
+    setDurationMin(min);
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    const min = Number(duration);
-    store.addPlanTicket(dateKey, {
+    const result = store.addPlanTicket(dateKey, {
       title,
       priority,
-      durationMin: Number.isFinite(min) && min > 0 ? min : undefined,
+      durationMin: effectiveMin ?? undefined,
+      notes: notes.trim() || undefined,
     });
-    setTitle('');
-    setDuration('');
-    setPriority('med');
+    if (result === 'duplicate') {
+      setFeedback('That intention is already on this day.');
+      return;
+    }
+    if (result === 'added') {
+      play('task');
+      setFeedback(null);
+      // Title + notes clear for the next one; time goal + priority stay
+      // sticky so similar intentions can be added in a row.
+      setTitle('');
+      setNotes('');
+      setNotesOpen(false);
+      titleRef.current?.focus();
+    }
   }
 
   return (
-    <form className="ticket-add" onSubmit={submit}>
-      <input
-        className="input"
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Goal for the day — e.g. Learn DSA: trees"
-        aria-label="Ticket title"
-        maxLength={120}
-      />
-      <div className="ticket-add-row">
+    <form className="composer" onSubmit={submit}>
+      <div className="composer-title-row">
         <input
-          className="input ticket-dur"
-          type="number"
-          min={0}
-          step={5}
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-          placeholder="min"
-          aria-label="Planned duration in minutes (optional)"
+          ref={titleRef}
+          className="input"
+          type="text"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            if (feedback) setFeedback(null);
+          }}
+          placeholder="I intend to… e.g. read 30 pages"
+          aria-label="Intention"
+          maxLength={120}
         />
-        <select
-          className="input ticket-prio"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value as TicketPriority)}
-          aria-label="Priority"
-        >
-          {PRIORITIES.map((p) => (
-            <option key={p.id} value={p.id}>{p.label}</option>
-          ))}
-        </select>
-        <button className="btn btn-primary" type="submit" disabled={!title.trim()} data-sound="task">
+        <button className="btn btn-primary" type="submit" disabled={!title.trim()} data-sound="none">
           Add
         </button>
       </div>
+
+      <div className="composer-row" role="group" aria-label="Time goal">
+        <span className="composer-label">Time goal</span>
+        <div className="composer-chips">
+          {DURATION_PRESETS.map((p) => {
+            const on = !customOpen && durationMin === p.min;
+            return (
+              <button
+                key={p.label}
+                type="button"
+                className={`chip ${on ? 'is-on' : ''}`}
+                aria-pressed={on}
+                data-sound="none"
+                onClick={() => pickPreset(p.min)}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className={`chip ${customOpen ? 'is-on' : ''}`}
+            aria-pressed={customOpen}
+            data-sound="none"
+            onClick={() => setCustomOpen((v) => !v)}
+          >
+            Custom
+          </button>
+          {customOpen && (
+            <input
+              className="input composer-custom"
+              type="number"
+              min={1}
+              max={720}
+              step={5}
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="min"
+              aria-label="Custom time goal in minutes"
+              autoFocus
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="composer-row" role="group" aria-label="Priority">
+        <span className="composer-label">Priority</span>
+        <div className="composer-chips">
+          {PRIORITIES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`chip chip-prio tone-${p.tone} ${priority === p.id ? 'is-on' : ''}`}
+              aria-pressed={priority === p.id}
+              data-sound="none"
+              onClick={() => setPriority(p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`chip ${notesOpen ? 'is-on' : ''}`}
+            aria-pressed={notesOpen}
+            data-sound="none"
+            onClick={() => setNotesOpen((v) => !v)}
+          >
+            + Notes
+          </button>
+        </div>
+      </div>
+
+      {notesOpen && (
+        <textarea
+          className="input ticket-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="A little context for future you (optional)"
+          rows={2}
+          aria-label="Notes"
+        />
+      )}
+
+      {feedback && <p className="composer-feedback" role="status">{feedback}</p>}
     </form>
   );
 }
@@ -361,10 +473,10 @@ function TicketCard({
     return (
       <li className="ticket ticket-editing">
         <form onSubmit={save} className="ticket-edit">
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} aria-label="Title" autoFocus />
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} aria-label="Intention" autoFocus />
           <textarea className="input ticket-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" rows={2} aria-label="Notes" />
           <div className="ticket-add-row">
-            <input className="input ticket-dur" type="number" min={0} step={5} value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="min" aria-label="Duration" />
+            <input className="input ticket-dur" type="number" min={0} step={5} value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="min" aria-label="Time goal in minutes" />
             <select className="input ticket-prio" value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} aria-label="Priority">
               {PRIORITIES.map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
             </select>
@@ -379,7 +491,7 @@ function TicketCard({
   const spentLabel = spent > 0 || durationMs > 0 ? formatHMS(spent) : null;
 
   return (
-    <li className={`ticket ${ticket.status === 'done' ? 'ticket-done' : ''} ${timing ? 'ticket-timing-row' : ''}`}>
+    <li className={`ticket ticket-pop ${ticket.status === 'done' ? 'ticket-done' : ''} ${timing ? 'ticket-timing-row' : ''}`}>
       <div className="ticket-main">
         <span className={`prio-dot tone-${prio.tone}`} title={`${prio.label} priority`} aria-hidden="true" />
         <div className="ticket-text">
@@ -393,7 +505,7 @@ function TicketCard({
         <div className={`ticket-time ${overGoal ? 'is-over' : ''}`}>
           {timing && <span className="timing-dot" aria-hidden="true" />}
           <span className="ticket-time-label mono">
-            {timing ? 'timing · ' : ''}
+            {timing ? 'focusing · ' : ''}
             {spentLabel}
             {dur ? ` / ${dur}` : ''}
             {overGoal ? ' ✓' : ''}
@@ -420,7 +532,7 @@ function TicketCard({
                   className={`status-seg tone-${s.tone} ${ticket.status === s.id ? 'is-on' : ''}`}
                   aria-pressed={ticket.status === s.id}
                   disabled={disabled}
-                  title={disabled ? 'Clock in and be Working to start the timer' : undefined}
+                  title={disabled ? 'Settle in and be In flow to start the timer' : undefined}
                   onClick={() => store.setPlanStatus(dateKey, ticket.id, s.id)}
                   data-sound="switch"
                 >
@@ -437,9 +549,9 @@ function TicketCard({
 
         {editable && (
           <div className="ticket-actions">
-            <button type="button" title="Edit" aria-label="Edit ticket" data-sound="none" onClick={() => setEditing(true)}>✎</button>
+            <button type="button" title="Edit" aria-label="Edit intention" data-sound="none" onClick={() => setEditing(true)}>✎</button>
             <button type="button" title="Move to next day" aria-label="Move to next day" data-sound="none" onClick={() => store.movePlanTicketNextDay(dateKey, ticket.id)}>→</button>
-            <button type="button" title="Delete" aria-label="Delete ticket" data-sound="none" onClick={() => store.removePlanTicket(dateKey, ticket.id)}>🗑</button>
+            <button type="button" title="Remove" aria-label="Remove intention" data-sound="none" onClick={() => store.removePlanTicket(dateKey, ticket.id)}>🗑</button>
           </div>
         )}
       </div>

@@ -49,7 +49,7 @@ export function WeekHoursChart({
 
   return (
     <svg className="chart" viewBox={`0 0 ${W} 120`} role="img"
-      aria-label="Worked hours per day this week">
+      aria-label="Hours in flow per day this week">
       <line x1="0" y1={base} x2={W} y2={base} stroke="var(--line)" strokeWidth="1" />
       {buckets.map((ms, i) => {
         const h = maxMs > 0 ? (ms / maxMs) * plotH : 0;
@@ -132,7 +132,7 @@ export function BreakUsageChart({ history }: { history: HistoryEntry[] }) {
 
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${rowH * 3 + 6}`} role="img"
-      aria-label="Break budget used in the last shift">
+      aria-label="Breather budget used on the last day">
       {BREAK_ORDER.map((k, i) => {
         const used = byKey[k];
         const limit = BREAK_LIMITS[k];

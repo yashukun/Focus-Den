@@ -113,6 +113,21 @@ sign-out-everywhere in Settings, a **sync-status dot** in the header, and the
 session-expiry fix (401 keeps local changes and prompts an in-place re-login).
 Accounts are permanent — deletion only by the owner, password-confirmed.
 
+**Update 2026-07-22:** the email flows (signup verification, emailed resets,
+change email) were removed again — accounts are **username + password only**,
+and forgotten passwords use the admin `reset-password` script. The SES
+implementation lives in git history if email returns.
+
+**Update 2026-08-16 (v2.0.0):** the client went **fully local** — accounts and
+sync were removed from the app (`state/sync.ts`, `state/auth.ts`,
+`state/api.ts`, `Login.tsx` deleted; "No accounts, no cloud" is now the
+pitch on the new Home landing page). Data lives in `localStorage` with JSON
+export/import; the Fastify server remains only to host the built frontend
+(Docker/AWS/Homebrew). Its sync-era API is still present server-side but
+unused — remove it or revive it from git history when this question is next
+revisited. Same release also added the `src/fx` animation layer (anime.js)
+and renamed the tabs (Today / Plan / Den / Journal / Settings).
+
 ## Later / unscheduled
 
 - `Meeting` state; configurable shift length & schedule; PWA (manifest +

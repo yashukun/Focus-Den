@@ -23,9 +23,7 @@ IGNORE/
 CLAUDE.md
 focus-den-remote.db
 pull-db.py
-docs/DEPLOY-AWS.md
-docs/EMAIL-SETUP.md
-docs/DEVELOPMENT.md
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

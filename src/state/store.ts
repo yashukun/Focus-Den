@@ -1,10 +1,11 @@
 /**
  * The app store: a tiny framework-agnostic event emitter wrapping the pure
  * core. It holds the persisted `State` plus a transient, in-memory
- * `ShiftSummary` (the end-of-shift modal payload, intentionally not persisted).
+ * `ShiftSummary` (the end-of-day modal payload, intentionally not persisted).
  *
  * All domain decisions live in `../core`; this layer only sequences them,
- * persists, and notifies subscribers. React reads it via `useStore`.
+ * persists to localStorage (the single local profile), and notifies
+ * subscribers. React reads it via `useStore`.
  */
 
 import {
@@ -17,13 +18,14 @@ import {
   clockIn as coreClockIn,
   dateString,
   defaultState,
+  endTimeOf,
   finalizeShift,
   getItem,
   isActive,
   isDateEditable,
   moveTicketToNextDay as planMoveNext,
   removeTicket as planRemove,
-  SHIFT_MS,
+  shouldAutoEnd,
   switchStatus as coreSwitch,
   ticketsFor,
   updateTicket as planUpdate,
@@ -44,34 +46,23 @@ import {
 } from '../core';
 import { clearState, coerceState, loadState, saveState } from './persist';
 import { play } from '../audio';
-import * as auth from './auth';
-import { api, ApiError, setToken, type RevisionMeta } from './api';
-import { sync, type SyncStatus } from './sync';
-
-export interface SessionInfo {
-  userId: string;
-  name: string;
-  /** the server-designated admin sees testing tools + reset */
-  isAdmin: boolean;
-}
 
 export interface Snapshot {
   state: State;
-  /** present only right after a clock-out / auto-end, until dismissed */
+  /** present only right after a wrap-up / auto-end, until dismissed */
   summary: ShiftSummary | null;
-  /** the signed-in profile, or null when the login gate should show */
-  session: SessionInfo | null;
-  /** this device's relationship with the server right now */
-  syncStatus: SyncStatus;
 }
 
-/** Fields for a new planner ticket (id/status/createdAt filled by the store). */
+/** Fields for a new intention (id/status/createdAt filled by the store). */
 export interface NewTicket {
   title: string;
   durationMin?: number;
   priority?: TicketPriority;
   notes?: string;
 }
+
+/** Outcome of adding an intention, for inline UI feedback. */
+export type AddTicketResult = 'added' | 'duplicate' | 'invalid';
 
 /** Outcome of a duplicate action, for user feedback. */
 export interface CopyResult {
@@ -89,7 +80,7 @@ function titleKey(t: PlanTicket): string {
   return t.title.trim().toLowerCase();
 }
 
-/** A fresh "to do" copy of a ticket (new id, no spent time). */
+/** A fresh "to do" copy of an intention (new id, no spent time). */
 function freshCopy(t: PlanTicket): PlanTicket {
   return {
     ...t,
@@ -101,7 +92,7 @@ function freshCopy(t: PlanTicket): PlanTicket {
   };
 }
 
-/** Map a single ticket immutably (used for tracking/spent updates). */
+/** Map a single intention immutably (used for tracking/spent updates). */
 function patchTicketIn(s: State, dateKey: string, id: string, patch: Partial<PlanTicket>): State {
   const list = s.plan.tickets[dateKey];
   if (!list) return s;
@@ -111,7 +102,7 @@ function patchTicketIn(s: State, dateKey: string, id: string, patch: Partial<Pla
   };
 }
 
-/** Commit the accruing slice of the tracked ticket into its spentMs, then pause. */
+/** Commit the accruing slice of the tracked intention into its spentMs, then pause. */
 function commitTracking(s: State, now: number): State {
   const tr = s.tracking;
   if (!tr || tr.anchorMs == null) return s;
@@ -125,7 +116,7 @@ function commitTracking(s: State, now: number): State {
   });
 }
 
-/** Resume accrual on the tracked ticket if the shift is Working. */
+/** Resume accrual on the tracked intention if the day is In flow. */
 function resumeTracking(s: State, now: number): State {
   const tr = s.tracking;
   if (!tr || tr.anchorMs != null) return s;
@@ -141,7 +132,7 @@ function notifyDurationComplete(t: PlanTicket): void {
   }
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('Ticket time complete', {
+      new Notification('Intention complete', {
         body: `“${t.title}” reached its ${t.durationMin}-minute goal.`,
       });
     }
@@ -150,44 +141,11 @@ function notifyDurationComplete(t: PlanTicket): void {
   }
 }
 
-let userId: string | null = null;
-let userName: string | null = null;
-let userIsAdmin = false;
-let state: State = defaultState();
+let state: State = loadState();
 let summary: ShiftSummary | null = null;
 
-function adoptAccountFacts(account: auth.Account): void {
-  userName = account.name;
-  userIsAdmin = account.isAdmin === true;
-}
-
-// Resume a persisted session if the account still exists.
-(() => {
-  const sid = auth.currentUserId();
-  if (!sid) return;
-  const account = auth.getAccount(sid);
-  if (!account) {
-    auth.logout();
-    return;
-  }
-  userId = sid;
-  adoptAccountFacts(account);
-  state = loadState(sid);
-})();
-
 function makeSnapshot(): Snapshot {
-  return {
-    state,
-    summary,
-    session: userId
-      ? {
-          userId,
-          name: userName ?? userId,
-          isAdmin: userIsAdmin,
-        }
-      : null,
-    syncStatus: sync.getStatus(),
-  };
+  return { state, summary };
 }
 
 let snapshot: Snapshot = makeSnapshot();
@@ -202,19 +160,7 @@ function publish(): void {
 function setState(next: State): void {
   if (next === state) return;
   state = next;
-  if (userId) saveState(userId, state);
-  sync.markDirty(); // schedule a debounced push (no-op when signed out/offline)
-  publish();
-}
-
-/**
- * Adopt a server copy WITHOUT scheduling a push back (used by the sync layer);
- * updates the in-memory state + local cache and notifies subscribers.
- */
-function applyRemote(next: State): void {
-  state = next;
-  summary = null;
-  if (userId) saveState(userId, state);
+  saveState(state);
   publish();
 }
 
@@ -227,8 +173,6 @@ function applyPerkPurchase(perks: Perks, id: string): Perks {
   switch (id) {
     case 'perk_streak_freeze':
       return { ...perks, streakFreeze: perks.streakFreeze + 1 };
-    case 'perk_soundscape':
-      return { ...perks, soundscape: true };
     case 'perk_theme_midnight':
       return { ...perks, themeMidnight: true };
     case 'perk_theme_sunrise':
@@ -256,7 +200,7 @@ export const store = {
     return state;
   },
 
-  // ── Shift actions ────────────────────────────────────────────────────────
+  // ── Day actions ──────────────────────────────────────────────────────────
 
   clockIn(now: number): void {
     if (!canClockIn(state, now)) return;
@@ -268,8 +212,8 @@ export const store = {
     if (!isActive(state.shift.status)) return;
     const shift = coreSwitch(state.shift, target, now);
     if (shift === state.shift) return;
-    // Sync the ticket timer with the worked clock: commit the slice up to now,
-    // apply the new status, then resume only if we're back in Working.
+    // Sync the intention timer with the flow clock: commit the slice up to now,
+    // apply the new status, then resume only if we're back In flow.
     let next = commitTracking(state, now);
     next = { ...next, shift };
     next = resumeTracking(next, now);
@@ -283,7 +227,7 @@ export const store = {
     setState({ ...state, shift });
   },
 
-  /** Edit a task's text in place, preserving its timestamp. */
+  /** Edit a win's text in place, preserving its timestamp. */
   editTask(index: number, text: string): void {
     const tasks = state.shift.tasks;
     if (index < 0 || index >= tasks.length) return;
@@ -293,7 +237,7 @@ export const store = {
     setState({ ...state, shift: { ...state.shift, tasks: next } });
   },
 
-  /** Delete a task by index. */
+  /** Delete a win by index. */
   deleteTask(index: number): void {
     const tasks = state.shift.tasks;
     if (index < 0 || index >= tasks.length) return;
@@ -301,7 +245,7 @@ export const store = {
     setState({ ...state, shift: { ...state.shift, tasks: next } });
   },
 
-  /** Manual "End shift" (finalizes early at `now`). */
+  /** Manual "Wrap up" (finalizes early at `now`). */
   endShift(now: number): void {
     if (!isActive(state.shift.status)) return;
     let s = commitTracking(state, now);
@@ -312,23 +256,23 @@ export const store = {
   },
 
   /**
-   * Per-second heartbeat. Enforces the break grace auto-offline (including any
-   * permanent grace-bonus perk) and the 12h auto clock-out. A no-op (no persist,
+   * Per-second heartbeat. Enforces the breather grace auto-away (including any
+   * permanent grace-bonus perk) and the 12h auto wrap-up. A no-op (no persist,
    * no notify) when nothing crosses a threshold — the common case.
    */
   tick(now: number): void {
     const shift = state.shift;
-    if (!isActive(shift.status) || shift.clockIn == null) return;
+    const endTime = endTimeOf(shift);
+    if (!isActive(shift.status) || endTime == null) return;
 
-    const endTime = shift.clockIn + SHIFT_MS;
     const t = Math.min(now, endTime);
     const grace = applyBreakGrace(shift, t, state.perks.graceBonusMs);
     let working = grace.autoOfflined ? { ...state, shift: grace.shift } : state;
-    // Auto-offline came from a break (not Working), so tracking is already
+    // Auto-away came from a breather (not In flow), so tracking is already
     // paused; commit defensively in case.
     if (grace.autoOfflined) working = commitTracking(working, t);
 
-    if (now >= endTime) {
+    if (shouldAutoEnd(shift, now)) {
       let s = commitTracking(working, endTime);
       s = { ...s, tracking: null };
       const result = finalizeShift(s, endTime);
@@ -337,7 +281,7 @@ export const store = {
       return;
     }
 
-    // Fire the duration-complete notification once for the actively-timed ticket.
+    // Fire the duration-complete notification once for the actively-timed intention.
     let s = working;
     const tr = s.tracking;
     if (s.shift.status === 'working' && tr && tr.anchorMs != null) {
@@ -408,11 +352,17 @@ export const store = {
 
   // ── Day planner ──────────────────────────────────────────────────────────────
 
-  addPlanTicket(dateKey: string, fields: NewTicket): void {
+  /**
+   * Add an intention to a day. Rejects empty titles, locked (past) days, and
+   * duplicate titles on the same day — the caller shows the feedback inline.
+   */
+  addPlanTicket(dateKey: string, fields: NewTicket): AddTicketResult {
     const title = fields.title.trim();
-    if (!title) return;
+    if (!title) return 'invalid';
     const today = dateString(Date.now());
-    if (!isDateEditable(dateKey, today)) return;
+    if (!isDateEditable(dateKey, today)) return 'invalid';
+    const key = title.toLowerCase();
+    if (ticketsFor(state.plan, dateKey).some((t) => titleKey(t) === key)) return 'duplicate';
     const ticket: PlanTicket = {
       id: nextTicketId(),
       title,
@@ -423,6 +373,7 @@ export const store = {
       createdAt: Date.now(),
     };
     setState({ ...state, plan: planAddTicket(state.plan, dateKey, ticket, today) });
+    return 'added';
   },
 
   updatePlanTicket(dateKey: string, id: string, patch: TicketPatch): void {
@@ -432,26 +383,26 @@ export const store = {
   },
 
   /**
-   * Change a ticket's status. Starting (in_progress) is only allowed for today
-   * while clocked in and Working, and begins the synced timer. Marking done
-   * stops the timer and logs the ticket to the shift's task list.
+   * Change an intention's status. Starting (in_progress) is only allowed for
+   * today while settled in and In flow, and begins the synced timer. Marking
+   * done stops the timer and logs the intention to the day's wins.
    */
   setPlanStatus(dateKey: string, id: string, status: TicketStatus): void {
     const now = Date.now();
     const today = dateString(now);
 
     if (status === 'in_progress') {
-      // Can only start while clocked in, Working, and on today's tickets.
+      // Can only start while settled in, In flow, and on today's intentions.
       if (state.shift.status !== 'working' || dateKey !== today) return;
-      let s = commitTracking(state, now); // pause any other tracked ticket
+      let s = commitTracking(state, now); // pause any other tracked intention
       s = patchTicketIn(s, dateKey, id, { status: 'in_progress', notified: false });
       s = { ...s, tracking: { dateKey, ticketId: id, anchorMs: null } };
-      s = resumeTracking(s, now); // anchor now (we are Working)
+      s = resumeTracking(s, now); // anchor now (we are In flow)
       if (s !== state) setState(s);
       return;
     }
 
-    // To do / Done: if this was the timed ticket, commit + stop tracking.
+    // To do / Done: if this was the timed intention, commit + stop tracking.
     let s = state;
     if (s.tracking && s.tracking.dateKey === dateKey && s.tracking.ticketId === id) {
       s = commitTracking(s, now);
@@ -461,7 +412,7 @@ export const store = {
     if (next !== s.plan) s = { ...s, plan: next };
     if (s !== state) setState(s);
 
-    // A finished ticket is logged as a completed task in the active shift.
+    // A finished intention is logged as a win in the active day.
     if (status === 'done' && isActive(state.shift.status)) {
       const ticket = ticketsFor(state.plan, dateKey).find((t) => t.id === id);
       if (ticket) this.addTask(ticket.title, now);
@@ -482,7 +433,7 @@ export const store = {
   movePlanTicketNextDay(dateKey: string, id: string): void {
     const now = Date.now();
     let s = state;
-    // Moving the timed ticket stops its timer (it changes day).
+    // Moving the timed intention stops its timer (it changes day).
     if (s.tracking && s.tracking.dateKey === dateKey && s.tracking.ticketId === id) {
       s = commitTracking(s, now);
       s = { ...s, tracking: null };
@@ -493,8 +444,8 @@ export const store = {
   },
 
   /**
-   * Duplicate a day's tickets to the next day — but skip any ticket the target
-   * day already has (by title), so repeated copies never create duplicates.
+   * Duplicate a day's intentions to the next day — but skip any the target day
+   * already has (by title), so repeated copies never create duplicates.
    */
   copyPlanDayToNextDay(dateKey: string): CopyResult {
     const today = dateString(Date.now());
@@ -518,8 +469,8 @@ export const store = {
   },
 
   /**
-   * Duplicate a day's tickets to the rest of its week — current + upcoming days
-   * only (past days skipped) — skipping any ticket a day already has, so
+   * Duplicate a day's intentions to the rest of its week — current + upcoming
+   * days only (past days skipped) — skipping any a day already has, so
    * duplicates never pile up.
    */
   copyPlanDayToWeek(dateKey: string): CopyResult {
@@ -547,7 +498,7 @@ export const store = {
     return { days: daysTouched.size, tickets: added };
   },
 
-  /** Remove all tickets for an editable day. */
+  /** Remove all intentions for an editable day. */
   clearPlanDay(dateKey: string): void {
     const today = dateString(Date.now());
     if (!isDateEditable(dateKey, today)) return;
@@ -581,7 +532,6 @@ export const store = {
   },
 
   setSoundscapeOn(on: boolean): void {
-    if (on && !state.perks.soundscape) return;
     setSettings({ soundscapeOn: on });
   },
 
@@ -618,167 +568,10 @@ export const store = {
     }
   },
 
-  // ── Server backups (state revisions) ────────────────────────────────────────
-
-  /** Server-side snapshots of past synced states, newest first. Throws offline. */
-  listBackups(): Promise<RevisionMeta[]> {
-    return api.listRevisions().then((r) => r.revisions);
-  },
-
-  /**
-   * Restore a server revision. The server re-stamps it as the newest copy, so
-   * the follow-up pull adopts it here (and every other device follows suit).
-   */
-  async restoreBackup(rev: number): Promise<boolean> {
-    try {
-      await api.restoreRevision(rev);
-    } catch {
-      return false;
-    }
-    await sync.pullAndReconcile();
-    return true;
-  },
-
-  // ── Session ─────────────────────────────────────────────────────────────────
-
-  /** Activate a profile after auth succeeds; loads that profile's game state. */
-  signIn(id: string): void {
-    const account = auth.getAccount(id);
-    if (!account) return;
-    userId = id;
-    adoptAccountFacts(account);
-    state = loadState(id); // instant local render
-    summary = null;
-    sync.authRestored(); // clears any expired flag, then pulls + pushes
-    publish();
-  },
-
-  signOut(): void {
-    auth.logout();
-    setToken(null);
-    sync.stop();
-    userId = null;
-    userName = null;
-    userIsAdmin = false;
-    state = defaultState();
-    summary = null;
-    publish();
-  },
-
-  /**
-   * Re-authenticate in place after the session expired (token aged out or was
-   * revoked). Keeps all local work; pending changes push right after.
-   */
-  async reauthenticate(password: string): Promise<{ ok: boolean; error?: string }> {
-    if (!userId) return { ok: false, error: 'Not signed in.' };
-    const res = await auth.login(userId, password);
-    if (!res.ok) return { ok: false, error: res.error };
-    const account = auth.getAccount(userId);
-    if (account) adoptAccountFacts(account);
-    sync.authRestored();
-    publish();
-    return { ok: true };
-  },
-
-  // ── Account management ──────────────────────────────────────────────────────
-
-  /** Fresh account facts from the server (admin); quiet offline. */
-  async refreshAccount(): Promise<void> {
-    if (!userId) return;
-    try {
-      const info = await api.accountInfo();
-      auth.updateAccountFacts(userId, { isAdmin: info.isAdmin });
-      const account = auth.getAccount(userId);
-      if (account) adoptAccountFacts(account);
-      publish();
-    } catch {
-      // offline or expired — the cached facts stay
-    }
-  },
-
-  async changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> {
-    if (!userId) return { ok: false, error: 'Not signed in.' };
-    try {
-      const res = await api.changePassword(currentPassword, newPassword);
-      setToken(res.token); // other sessions are dead; this one re-keyed
-      await auth.updateCachedPassword(userId, newPassword);
-      return { ok: true };
-    } catch (err) {
-      if (err instanceof ApiError) return { ok: false, error: err.message };
-      return { ok: false, error: 'Can’t reach the server — try again when online.' };
-    }
-  },
-
-  /** Revoke every session everywhere; this device gets a fresh token. */
-  async signOutEverywhere(): Promise<{ ok: boolean; error?: string }> {
-    try {
-      const res = await api.logoutAll();
-      setToken(res.token);
-      return { ok: true };
-    } catch (err) {
-      if (err instanceof ApiError) return { ok: false, error: err.message };
-      return { ok: false, error: 'Can’t reach the server — try again when online.' };
-    }
-  },
-
-  /**
-   * Delete the signed-in profile (server + local) and end the session.
-   * Destructive and irreversible, so the server confirms the password first —
-   * nothing is deleted (anywhere) unless it accepts.
-   */
-  async deleteCurrentAccount(password: string): Promise<{ ok: boolean; error?: string }> {
-    if (!userId) return { ok: false, error: 'Not signed in.' };
-    const id = userId;
-    try {
-      await api.deleteAccount(password);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        return { ok: false, error: err.status === 401 ? 'Incorrect password.' : err.message };
-      }
-      return { ok: false, error: 'Can’t reach the server — deleting needs a connection.' };
-    }
-    setToken(null);
-    sync.stop();
-    clearState(id);
-    auth.deleteAccount(id);
-    userId = null;
-    userName = null;
-    userIsAdmin = false;
-    state = defaultState();
-    summary = null;
-    publish();
-    return { ok: true };
-  },
-
-  // ── Maintenance / testing ──────────────────────────────────────────────────
-
-  /** Admin-only (UI-gated; the guard here keeps casual misuse out too). */
+  /** Wipe everything and start fresh (Settings → danger zone). */
   resetAll(): void {
-    if (!userId || !userIsAdmin) return;
     summary = null;
-    clearState(userId);
+    clearState();
     setState(defaultState());
   },
-
-  /**
-   * Admin/testing-only: credit points directly, bypassing the
-   * clock-out/purchase rule. Lets you exercise the shop + room loop without
-   * grinding a full shift.
-   */
-  devGrantPoints(amount: number): void {
-    if (!userIsAdmin) return;
-    if (!Number.isFinite(amount) || amount === 0) return;
-    setState({ ...state, points: Math.max(0, state.points + amount) });
-  },
 };
-
-// Wire the sync controller to the store (callbacks avoid a circular import),
-// begin listening for connectivity changes, and reconcile a resumed session.
-sync.bindStore({
-  getState: () => state,
-  getUserId: () => userId,
-  adoptRemote: applyRemote,
-  onStatusChange: publish,
-});
-sync.start();
-if (userId) void sync.pullAndReconcile();

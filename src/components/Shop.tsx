@@ -11,6 +11,7 @@ import {
   type Item,
   type State,
 } from '../core';
+import { useBumpOnChange, useCelebrateOnIncrease } from '../fx';
 import { store } from '../state/store';
 
 export interface ShopProps {
@@ -20,16 +21,17 @@ export interface ShopProps {
 }
 
 export function Shop({ state, embedded }: ShopProps) {
+  const walletRef = useBumpOnChange(state.points);
   return (
     <div className="shop">
       {embedded ? (
         <p className="shop-balance muted">
-          Balance <span className="mono tone-points">◈ {state.points}</span>
+          Balance <span className="mono tone-points" ref={walletRef}>◈ {state.points}</span>
         </p>
       ) : (
         <header className="shop-head">
           <h1>Shop</h1>
-          <div className="wallet mono tone-points" aria-label={`Balance ${state.points} points`}>
+          <div className="wallet mono tone-points" ref={walletRef} aria-label={`Balance ${state.points} points`}>
             ◈ {state.points}
           </div>
         </header>
@@ -61,6 +63,8 @@ function ShopCard({ item, state }: { item: Item; state: State }) {
   const owned = !consumable && !!state.owned[item.id];
   const affordable = state.points >= item.price;
   const short = item.price - state.points;
+  // Goes up exactly when this card is bought: owning flips 0→1, restocking bumps qty.
+  const cardRef = useCelebrateOnIncrease((owned ? 1 : 0) + qty);
 
   let button: React.ReactNode;
   if (item.comingSoon) {
@@ -84,7 +88,7 @@ function ShopCard({ item, state }: { item: Item; state: State }) {
   const label = tag(item);
 
   return (
-    <article className={`shop-card ${owned ? 'is-owned' : ''} ${item.comingSoon ? 'is-soon' : ''}`}>
+    <article ref={cardRef} className={`shop-card ${owned ? 'is-owned' : ''} ${item.comingSoon ? 'is-soon' : ''}`}>
       <div className="shop-card-body">
         <div className="shop-card-tags">
           {label && <span className="tagchip">{label}</span>}
