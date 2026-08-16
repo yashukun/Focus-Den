@@ -100,6 +100,67 @@ describe('coerceState (deep validation)', () => {
     expect(list[1].priority).toBe('med');
   });
 
+  it('accepts the blocked status and critical priority, defaults the rest', () => {
+    const s = coerceState({
+      v: 2,
+      plan: {
+        tickets: {
+          '2026-07-02': [
+            { id: 't1', title: 'A', status: 'blocked', priority: 'critical', createdAt: 1 },
+          ],
+        },
+      },
+    })!;
+    expect(s.plan.tickets['2026-07-02'][0].status).toBe('blocked');
+    expect(s.plan.tickets['2026-07-02'][0].priority).toBe('critical');
+  });
+
+  it('bounds descHtml and drops garbage deadlines (sanitization is a UI concern)', () => {
+    const s = coerceState({
+      v: 2,
+      plan: {
+        tickets: {
+          '2026-07-02': [
+            {
+              id: 't1',
+              title: 'A',
+              status: 'todo',
+              priority: 'med',
+              createdAt: 1,
+              descHtml: `<p>ok</p>${'x'.repeat(500_000)}`,
+              deadlineMs: 1_754_000_000_000,
+            },
+            {
+              id: 't2',
+              title: 'B',
+              status: 'todo',
+              priority: 'med',
+              createdAt: 1,
+              descHtml: 42,
+              deadlineMs: Infinity,
+            },
+            {
+              id: 't3',
+              title: 'C',
+              status: 'todo',
+              priority: 'med',
+              createdAt: 1,
+              descHtml: '   ',
+              deadlineMs: 'tomorrow',
+            },
+          ],
+        },
+      },
+    })!;
+    const [a, b, c] = s.plan.tickets['2026-07-02'];
+    expect(a.descHtml!.length).toBeLessThanOrEqual(400_000);
+    expect(a.deadlineMs).toBe(1_754_000_000_000);
+    expect(b.descHtml).toBeUndefined();
+    expect(b.deadlineMs).toBeUndefined();
+    expect(c.descHtml).toBeUndefined(); // whitespace-only collapses away
+    expect(c.deadlineMs).toBeUndefined();
+  });
+
   it('never copies __proto__/constructor keys from untrusted records', () => {
     const s = coerceState({
       v: 2,

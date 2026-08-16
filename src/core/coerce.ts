@@ -43,6 +43,9 @@ const MAX_TASK_TEXT = 500;
 const MAX_TASKS = 500;
 const MAX_TITLE = 200;
 const MAX_NOTES = 2000;
+// Rich descriptions may embed a few compressed data: images (~100–300KB each);
+// the whole State document still has to fit in the localStorage quota.
+const MAX_DESC_HTML = 400_000;
 const MAX_HISTORY = 5000;
 const MAX_TICKETS_PER_DAY = 100;
 const MAX_PLAN_DAYS = 800;
@@ -96,8 +99,8 @@ function safeEntries(v: unknown): [string, unknown][] {
 const STATUSES: readonly Status[] = ['idle', 'working', 'break1', 'break2', 'lunch', 'offline', 'ended'];
 const THEMES: readonly ThemeId[] = ['cozy', 'midnight', 'sunrise'];
 const APPEARANCES: readonly Appearance[] = ['system', 'light', 'dark'];
-const TICKET_STATUSES: readonly TicketStatus[] = ['todo', 'in_progress', 'done'];
-const PRIORITIES: readonly TicketPriority[] = ['low', 'med', 'high'];
+const TICKET_STATUSES: readonly TicketStatus[] = ['todo', 'in_progress', 'blocked', 'done'];
+const PRIORITIES: readonly TicketPriority[] = ['low', 'med', 'high', 'critical'];
 const BREAKS: readonly BreakKey[] = ['break1', 'break2', 'lunch'];
 
 function coerceOwned(v: unknown): Record<string, boolean> {
@@ -243,6 +246,10 @@ function coerceTicket(v: unknown): PlanTicket | null {
   };
   const notes = str(t.notes, MAX_NOTES)?.trim();
   if (notes) ticket.notes = notes;
+  const descHtml = str(t.descHtml, MAX_DESC_HTML)?.trim();
+  if (descHtml) ticket.descHtml = descHtml;
+  const deadlineMs = numOrNull(t.deadlineMs, 0, MAX_EPOCH_MS);
+  if (deadlineMs !== null) ticket.deadlineMs = deadlineMs;
   const durationMin = numOrNull(t.durationMin, 1, 24 * 60);
   if (durationMin !== null) ticket.durationMin = Math.round(durationMin);
   const spentMs = numOrNull(t.spentMs, 0, MAX_SPAN_MS);

@@ -59,6 +59,9 @@ export interface NewTicket {
   durationMin?: number;
   priority?: TicketPriority;
   notes?: string;
+  /** allowlist-sanitized HTML (the UI sanitizes before it reaches the store) */
+  descHtml?: string;
+  deadlineMs?: number;
 }
 
 /** Outcome of adding an intention, for inline UI feedback. */
@@ -370,6 +373,8 @@ export const store = {
       status: 'todo',
       priority: fields.priority ?? 'med',
       durationMin: fields.durationMin && fields.durationMin > 0 ? Math.round(fields.durationMin) : undefined,
+      descHtml: fields.descHtml?.trim() || undefined,
+      deadlineMs: fields.deadlineMs,
       createdAt: Date.now(),
     };
     setState({ ...state, plan: planAddTicket(state.plan, dateKey, ticket, today) });
@@ -402,7 +407,7 @@ export const store = {
       return;
     }
 
-    // To do / Done: if this was the timed intention, commit + stop tracking.
+    // To do / Blocked / Done: if this was the timed intention, commit + stop tracking.
     let s = state;
     if (s.tracking && s.tracking.dateKey === dateKey && s.tracking.ticketId === id) {
       s = commitTracking(s, now);

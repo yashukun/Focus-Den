@@ -77,7 +77,10 @@ export function addTicket(
 }
 
 export type TicketPatch = Partial<
-  Pick<PlanTicket, 'title' | 'notes' | 'status' | 'priority' | 'durationMin'>
+  Pick<
+    PlanTicket,
+    'title' | 'notes' | 'descHtml' | 'deadlineMs' | 'status' | 'priority' | 'durationMin'
+  >
 >;
 
 /** Patch a ticket in place (no-op on locked days / unknown id). */

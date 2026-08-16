@@ -108,11 +108,11 @@ describe('render smoke', () => {
     expect(renderToString(<History state={s} now={NOW} />)).toContain('Journal');
   });
 
-  it('renders the Plan calendar with the intention composer', () => {
+  it('renders the Plan calendar, composer and detail placeholder', () => {
     const html = renderToString(<PlanView state={idleState()} now={NOW} />);
-    expect(html).toContain('Mon');
-    expect(html).toContain('I intend to');
-    expect(html).toContain('Time goal');
+    expect(html).toContain('Mo'); // weekday header
+    expect(html).toContain('Add a task');
+    expect(html).toContain('Select a task');
   });
 
   it('renders the summary modal', () => {

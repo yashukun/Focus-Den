@@ -78,14 +78,22 @@ export interface HistoryEntry {
 }
 
 /** A planned goal/ticket for a specific day (separate from the shift task log). */
-export type TicketStatus = 'todo' | 'in_progress' | 'done';
-export type TicketPriority = 'low' | 'med' | 'high';
+export type TicketStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
+export type TicketPriority = 'low' | 'med' | 'high' | 'critical';
 
 export interface PlanTicket {
   id: string;
   title: string;
-  /** optional longer description (Confluence-style detail) */
+  /** optional longer description (legacy plain text; superseded by descHtml) */
   notes?: string;
+  /**
+   * Rich description as allowlist-sanitized HTML (may embed data: images).
+   * Sanitization happens in the UI layer on save and render — coerce (shared
+   * with the server) only bounds its size, it cannot touch the DOM.
+   */
+  descHtml?: string;
+  /** optional due date+time, epoch ms */
+  deadlineMs?: number;
   status: TicketStatus;
   priority: TicketPriority;
   /** optional planned duration in minutes */

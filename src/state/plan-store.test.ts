@@ -43,6 +43,39 @@ describe('store: adding intentions', () => {
   });
 });
 
+describe('store: task fields (deadline, rich description)', () => {
+  it('stores and clears deadline + description through add/update', () => {
+    const today = dateString(Date.now());
+    const due = Date.now() + 3_600_000;
+    store.addPlanTicket(today, { title: 'Spec', descHtml: '<p>hello</p>', deadlineMs: due });
+    let t = ticketsFor(store.getState().plan, today)[0];
+    expect(t.descHtml).toBe('<p>hello</p>');
+    expect(t.deadlineMs).toBe(due);
+
+    store.updatePlanTicket(today, t.id, { deadlineMs: undefined, descHtml: undefined });
+    t = ticketsFor(store.getState().plan, today)[0];
+    expect(t.deadlineMs).toBeUndefined();
+    expect(t.descHtml).toBeUndefined();
+  });
+});
+
+describe('store: blocked status', () => {
+  it('blocking the timed intention stops its timer, like done does', () => {
+    const now = Date.now();
+    const today = dateString(now);
+    store.clockIn(now);
+    store.addPlanTicket(today, { title: 'Deep work' });
+    const id = ticketsFor(store.getState().plan, today)[0].id;
+    store.setPlanStatus(today, id, 'in_progress');
+    expect(store.getState().tracking?.ticketId).toBe(id);
+
+    store.setPlanStatus(today, id, 'blocked');
+    const s = store.getState();
+    expect(s.tracking).toBeNull();
+    expect(ticketsFor(s.plan, today)[0].status).toBe('blocked');
+  });
+});
+
 describe('store: plan duplication', () => {
   it('copies a day to the next day', () => {
     const today = dateString(Date.now());
