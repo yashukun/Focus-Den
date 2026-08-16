@@ -153,7 +153,7 @@ export function PlanView({ state, now }: PlanViewProps) {
         onAdded={(title) => setPendingTitle(title)}
       />
 
-      {selected ? (
+      {selected && (
         <DetailPanel
           key={selected.id}
           ticket={selected}
@@ -165,10 +165,6 @@ export function PlanView({ state, now }: PlanViewProps) {
           startable={selectedDay === todayKey && state.shift.status === 'working'}
           onClose={() => setSelectedId(null)}
         />
-      ) : (
-        <section className="card detail-panel detail-empty" aria-label="Task details">
-          <p className="muted">Select a task to see its details —<br />or add one and it opens here.</p>
-        </section>
       )}
     </div>
   );
@@ -342,23 +338,6 @@ function DayPanel({
 
       {editable && <Composer dateKey={dateKey} onAdded={onAdded} />}
 
-      {editable && tickets.length > 0 && (
-        <>
-          <div className="day-actions">
-            <button className="btn btn-sm" onClick={copyNextDay} title="Carry these tasks to the next day">
-              Carry → tomorrow
-            </button>
-            <button className="btn btn-sm" onClick={copyWeek} title="Carry these tasks to current + upcoming days this week">
-              Carry → week
-            </button>
-            <button className="btn btn-sm" onClick={clearDay} title="Remove every task for this day">
-              Clear day
-            </button>
-          </div>
-          {msg && <p className="plan-msg tone-work">{msg}</p>}
-        </>
-      )}
-
       {tickets.length === 0 ? (
         <p className="muted empty">
           {editable ? 'Nothing here yet — set a gentle intention for this day.' : 'Nothing was planned for this day.'}
@@ -388,6 +367,24 @@ function DayPanel({
       {editable && !startable && dateKey === todayKey && tickets.some((t) => t.status !== 'done') && (
         <p className="muted plan-hint">Settle in and be <strong>In flow</strong> to start a task's timer.</p>
       )}
+
+      {editable && tickets.length > 0 && (
+        <div className="day-foot">
+          <div className="day-actions">
+            <button className="day-action" data-sound="none" onClick={copyNextDay} title="Copy these tasks to the next day">
+              Carry to tomorrow
+            </button>
+            <button className="day-action" data-sound="none" onClick={copyWeek} title="Copy these tasks to the rest of this week">
+              Carry to week
+            </button>
+            <button className="day-action day-action-danger" data-sound="none" onClick={clearDay} title="Remove every task for this day">
+              Clear day
+            </button>
+          </div>
+          {msg && <p className="plan-msg tone-work">{msg}</p>}
+        </div>
+      )}
+
       {!editable && (
         <p className="muted day-locked-note">Past days can't be changed — they're a record of what you intended.</p>
       )}
@@ -519,8 +516,49 @@ function TicketRow({
         {done ? '✓' : ''}
       </button>
 
-      <div className="ticket-text">
-        <span className="ticket-title">{ticket.title}</span>
+      <div className="ticket-body">
+        <div className="ticket-line">
+          <span className="ticket-title">{ticket.title}</span>
+          <div className="status-menu-wrap">
+            <button
+              type="button"
+              className={`status-chip st-${ticket.status}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              title={editable ? 'Change status' : undefined}
+              disabled={!editable}
+              data-sound="none"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMenu();
+              }}
+            >
+              {st.label}
+            </button>
+            {menuOpen && (
+              <div className="status-menu" role="menu">
+                {STATUSES.map((s) => {
+                  const blocked = s.id === 'in_progress' && ticket.status !== 'in_progress' && !startable;
+                  return (
+                    <button
+                      key={s.id}
+                      role="menuitem"
+                      className={`status-menu-item st-${s.id} ${ticket.status === s.id ? 'is-on' : ''}`}
+                      disabled={blocked}
+                      title={blocked ? 'Settle in and be In flow to start the timer' : undefined}
+                      data-sound="switch"
+                      onClick={(e) => pickStatus(e, s.id)}
+                    >
+                      <span className={`status-menu-dot st-${s.id}`} aria-hidden="true" />
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
         <span className="ticket-meta">
           <span className={`prio-badge prio-${ticket.priority}`}>{priorityMeta(ticket.priority).label}</span>
           {dur && <span className="meta-chip mono">◔ {dur}</span>}
@@ -537,45 +575,6 @@ function TicketRow({
             </span>
           )}
         </span>
-      </div>
-
-      <div className="status-menu-wrap">
-        <button
-          type="button"
-          className={`status-chip st-${ticket.status}`}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          title={editable ? 'Change status' : undefined}
-          disabled={!editable}
-          data-sound="none"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleMenu();
-          }}
-        >
-          {st.label}
-        </button>
-        {menuOpen && (
-          <div className="status-menu" role="menu">
-            {STATUSES.map((s) => {
-              const blocked = s.id === 'in_progress' && ticket.status !== 'in_progress' && !startable;
-              return (
-                <button
-                  key={s.id}
-                  role="menuitem"
-                  className={`status-menu-item st-${s.id} ${ticket.status === s.id ? 'is-on' : ''}`}
-                  disabled={blocked}
-                  title={blocked ? 'Settle in and be In flow to start the timer' : undefined}
-                  data-sound="switch"
-                  onClick={(e) => pickStatus(e, s.id)}
-                >
-                  <span className={`status-menu-dot st-${s.id}`} aria-hidden="true" />
-                  {s.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
     </li>
   );
