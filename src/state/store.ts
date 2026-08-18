@@ -23,6 +23,7 @@ import {
   getItem,
   isActive,
   isDateEditable,
+  moveTicketToDay as planMoveTo,
   moveTicketToNextDay as planMoveNext,
   removeTicket as planRemove,
   shouldAutoEnd,
@@ -45,7 +46,6 @@ import {
   type TicketStatus,
 } from '../core';
 import { clearState, coerceState, loadState, saveState } from './persist';
-import { play } from '../audio';
 
 export interface Snapshot {
   state: State;
@@ -62,6 +62,14 @@ export interface NewTicket {
   /** allowlist-sanitized HTML (the UI sanitizes before it reaches the store) */
   descHtml?: string;
   deadlineMs?: number;
+  /** scheduled start, minutes from local midnight (a slot on the week grid) */
+  startMin?: number;
+}
+
+/** Clamp a scheduled start into the day, or undefined when absent/garbage. */
+function clampStartMin(v: number | undefined): number | undefined {
+  if (v == null || !Number.isFinite(v)) return undefined;
+  return Math.min(24 * 60 - 1, Math.max(0, Math.round(v)));
 }
 
 /** Outcome of adding an intention, for inline UI feedback. */
@@ -83,65 +91,14 @@ function titleKey(t: PlanTicket): string {
   return t.title.trim().toLowerCase();
 }
 
-/** A fresh "to do" copy of an intention (new id, no spent time). */
+/** A fresh "to do" copy of an intention (new id). */
 function freshCopy(t: PlanTicket): PlanTicket {
   return {
     ...t,
     id: nextTicketId(),
     status: 'todo',
-    spentMs: 0,
-    notified: false,
     createdAt: Date.now(),
   };
-}
-
-/** Map a single intention immutably (used for tracking/spent updates). */
-function patchTicketIn(s: State, dateKey: string, id: string, patch: Partial<PlanTicket>): State {
-  const list = s.plan.tickets[dateKey];
-  if (!list) return s;
-  return {
-    ...s,
-    plan: { ...s.plan, tickets: { ...s.plan.tickets, [dateKey]: list.map((t) => (t.id === id ? { ...t, ...patch } : t)) } },
-  };
-}
-
-/** Commit the accruing slice of the tracked intention into its spentMs, then pause. */
-function commitTracking(s: State, now: number): State {
-  const tr = s.tracking;
-  if (!tr || tr.anchorMs == null) return s;
-  const paused: State = { ...s, tracking: { ...tr, anchorMs: null } };
-  const elapsed = Math.max(0, now - tr.anchorMs);
-  if (elapsed === 0) return paused;
-  const list = paused.plan.tickets[tr.dateKey];
-  if (!list) return paused;
-  return patchTicketIn(paused, tr.dateKey, tr.ticketId, {
-    spentMs: (list.find((t) => t.id === tr.ticketId)?.spentMs ?? 0) + elapsed,
-  });
-}
-
-/** Resume accrual on the tracked intention if the day is In flow. */
-function resumeTracking(s: State, now: number): State {
-  const tr = s.tracking;
-  if (!tr || tr.anchorMs != null) return s;
-  if (s.shift.status !== 'working') return s;
-  return { ...s, tracking: { ...tr, anchorMs: now } };
-}
-
-function notifyDurationComplete(t: PlanTicket): void {
-  try {
-    play('success');
-  } catch {
-    // ignore
-  }
-  try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('Intention complete', {
-        body: `“${t.title}” reached its ${t.durationMin}-minute goal.`,
-      });
-    }
-  } catch {
-    // ignore
-  }
 }
 
 let state: State = loadState();
@@ -208,19 +165,14 @@ export const store = {
   clockIn(now: number): void {
     if (!canClockIn(state, now)) return;
     summary = null;
-    setState({ ...coreClockIn(state, now), tracking: null });
+    setState(coreClockIn(state, now));
   },
 
   switchStatus(target: Status, now: number): void {
     if (!isActive(state.shift.status)) return;
     const shift = coreSwitch(state.shift, target, now);
     if (shift === state.shift) return;
-    // Sync the intention timer with the flow clock: commit the slice up to now,
-    // apply the new status, then resume only if we're back In flow.
-    let next = commitTracking(state, now);
-    next = { ...next, shift };
-    next = resumeTracking(next, now);
-    setState(next);
+    setState({ ...state, shift });
   },
 
   addTask(text: string, now: number): void {
@@ -251,9 +203,7 @@ export const store = {
   /** Manual "Wrap up" (finalizes early at `now`). */
   endShift(now: number): void {
     if (!isActive(state.shift.status)) return;
-    let s = commitTracking(state, now);
-    s = { ...s, tracking: null };
-    const result = finalizeShift(s, now);
+    const result = finalizeShift(state, now);
     summary = result.summary;
     setState(result.state);
   },
@@ -270,35 +220,16 @@ export const store = {
 
     const t = Math.min(now, endTime);
     const grace = applyBreakGrace(shift, t, state.perks.graceBonusMs);
-    let working = grace.autoOfflined ? { ...state, shift: grace.shift } : state;
-    // Auto-away came from a breather (not In flow), so tracking is already
-    // paused; commit defensively in case.
-    if (grace.autoOfflined) working = commitTracking(working, t);
+    const working = grace.autoOfflined ? { ...state, shift: grace.shift } : state;
 
     if (shouldAutoEnd(shift, now)) {
-      let s = commitTracking(working, endTime);
-      s = { ...s, tracking: null };
-      const result = finalizeShift(s, endTime);
+      const result = finalizeShift(working, endTime);
       summary = result.summary;
       setState(result.state);
       return;
     }
 
-    // Fire the duration-complete notification once for the actively-timed intention.
-    let s = working;
-    const tr = s.tracking;
-    if (s.shift.status === 'working' && tr && tr.anchorMs != null) {
-      const ticket = (s.plan.tickets[tr.dateKey] ?? []).find((x) => x.id === tr.ticketId);
-      if (ticket && ticket.durationMin && !ticket.notified) {
-        const spent = (ticket.spentMs ?? 0) + Math.max(0, now - tr.anchorMs);
-        if (spent >= ticket.durationMin * 60_000) {
-          s = patchTicketIn(s, tr.dateKey, tr.ticketId, { notified: true });
-          notifyDurationComplete(ticket);
-        }
-      }
-    }
-
-    if (s !== state) setState(s);
+    if (working !== state) setState(working);
   },
 
   dismissSummary(): void {
@@ -373,6 +304,7 @@ export const store = {
       status: 'todo',
       priority: fields.priority ?? 'med',
       durationMin: fields.durationMin && fields.durationMin > 0 ? Math.round(fields.durationMin) : undefined,
+      startMin: clampStartMin(fields.startMin),
       descHtml: fields.descHtml?.trim() || undefined,
       deadlineMs: fields.deadlineMs,
       createdAt: Date.now(),
@@ -388,34 +320,14 @@ export const store = {
   },
 
   /**
-   * Change an intention's status. Starting (in_progress) is only allowed for
-   * today while settled in and In flow, and begins the synced timer. Marking
-   * done stops the timer and logs the intention to the day's wins.
+   * Change an intention's status. Marking done also logs the intention to the
+   * day's wins while a shift is active.
    */
   setPlanStatus(dateKey: string, id: string, status: TicketStatus): void {
     const now = Date.now();
-    const today = dateString(now);
-
-    if (status === 'in_progress') {
-      // Can only start while settled in, In flow, and on today's intentions.
-      if (state.shift.status !== 'working' || dateKey !== today) return;
-      let s = commitTracking(state, now); // pause any other tracked intention
-      s = patchTicketIn(s, dateKey, id, { status: 'in_progress', notified: false });
-      s = { ...s, tracking: { dateKey, ticketId: id, anchorMs: null } };
-      s = resumeTracking(s, now); // anchor now (we are In flow)
-      if (s !== state) setState(s);
-      return;
-    }
-
-    // To do / Blocked / Done: if this was the timed intention, commit + stop tracking.
-    let s = state;
-    if (s.tracking && s.tracking.dateKey === dateKey && s.tracking.ticketId === id) {
-      s = commitTracking(s, now);
-      s = { ...s, tracking: null };
-    }
-    const next = planUpdate(s.plan, dateKey, id, { status }, today);
-    if (next !== s.plan) s = { ...s, plan: next };
-    if (s !== state) setState(s);
+    const next = planUpdate(state.plan, dateKey, id, { status }, dateString(now));
+    if (next === state.plan) return;
+    setState({ ...state, plan: next });
 
     // A finished intention is logged as a win in the active day.
     if (status === 'done' && isActive(state.shift.status)) {
@@ -428,49 +340,57 @@ export const store = {
     const today = dateString(Date.now());
     const next = planRemove(state.plan, dateKey, id, today);
     if (next === state.plan) return;
-    let s: State = { ...state, plan: next };
-    if (s.tracking && s.tracking.dateKey === dateKey && s.tracking.ticketId === id) {
-      s = { ...s, tracking: null };
-    }
-    setState(s);
+    setState({ ...state, plan: next });
   },
 
   movePlanTicketNextDay(dateKey: string, id: string): void {
-    const now = Date.now();
-    let s = state;
-    // Moving the timed intention stops its timer (it changes day).
-    if (s.tracking && s.tracking.dateKey === dateKey && s.tracking.ticketId === id) {
-      s = commitTracking(s, now);
-      s = { ...s, tracking: null };
-    }
-    const next = planMoveNext(s.plan, dateKey, id, dateString(now));
-    if (next === s.plan && s === state) return;
-    setState({ ...s, plan: next });
+    const next = planMoveNext(state.plan, dateKey, id, dateString(Date.now()));
+    if (next === state.plan) return;
+    setState({ ...state, plan: next });
   },
 
   /**
-   * Duplicate a day's intentions to the next day — but skip any the target day
-   * already has (by title), so repeated copies never create duplicates.
+   * Reschedule an intention onto another day (week-grid drag), optionally
+   * landing it on a new slot time in the same commit.
    */
-  copyPlanDayToNextDay(dateKey: string): CopyResult {
+  movePlanTicketToDay(fromKey: string, id: string, toKey: string, startMin?: number): void {
     const today = dateString(Date.now());
-    if (!isDateEditable(dateKey, today)) return { days: 0, tickets: 0 };
-    const src = ticketsFor(state.plan, dateKey);
+    let plan = planMoveTo(state.plan, fromKey, id, toKey, today);
+    if (plan === state.plan) return; // locked day / unknown id
+    const start = clampStartMin(startMin);
+    if (start !== undefined) plan = planUpdate(plan, toKey, id, { startMin: start }, today);
+    setState({ ...state, plan });
+  },
+
+  /**
+   * Duplicate a day's intentions onto any current/future day — skipping any
+   * the target already has (by title), so repeated copies never create
+   * duplicates. The source may be a past day: copying only reads it, and the
+   * past-days-locked rule protects the target alone.
+   */
+  copyPlanDayToDay(fromKey: string, toKey: string): CopyResult {
+    const today = dateString(Date.now());
+    if (toKey === fromKey || !isDateEditable(toKey, today)) return { days: 0, tickets: 0 };
+    const src = ticketsFor(state.plan, fromKey);
     if (!src.length) return { days: 0, tickets: 0 };
-    const nextDay = addDays(dateKey, 1);
-    const present = new Set(ticketsFor(state.plan, nextDay).map(titleKey));
+    const present = new Set(ticketsFor(state.plan, toKey).map(titleKey));
     let plan = state.plan;
     let added = 0;
     for (const t of src) {
       const key = titleKey(t);
       if (present.has(key)) continue;
       present.add(key);
-      plan = planAddTicket(plan, nextDay, freshCopy(t), today);
+      plan = planAddTicket(plan, toKey, freshCopy(t), today);
       added += 1;
     }
     if (plan === state.plan) return { days: 0, tickets: 0 };
     setState({ ...state, plan });
     return { days: 1, tickets: added };
+  },
+
+  /** "Carry to tomorrow": duplicate a day's intentions onto the following day. */
+  copyPlanDayToNextDay(dateKey: string): CopyResult {
+    return this.copyPlanDayToDay(dateKey, addDays(dateKey, 1));
   },
 
   /**
@@ -508,11 +428,9 @@ export const store = {
     const today = dateString(Date.now());
     if (!isDateEditable(dateKey, today)) return;
     if (!ticketsFor(state.plan, dateKey).length) return;
-    let s = state;
-    if (s.tracking && s.tracking.dateKey === dateKey) s = { ...s, tracking: null };
-    const tickets = { ...s.plan.tickets };
+    const tickets = { ...state.plan.tickets };
     delete tickets[dateKey];
-    setState({ ...s, plan: { ...s.plan, tickets } });
+    setState({ ...state, plan: { ...state.plan, tickets } });
   },
 
   // ── Settings ───────────────────────────────────────────────────────────────

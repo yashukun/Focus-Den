@@ -47,6 +47,12 @@ export function formatClock(epoch: number): string {
   return `${h}:${pad2(m)} ${ampm}`;
 }
 
+/** minutes-from-midnight -> 24h wall-clock "HH:MM", for scheduled slots. */
+export function formatSlotTime(min: number): string {
+  const clamped = Math.min(24 * 60 - 1, Math.max(0, Math.round(min)));
+  return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`;
+}
+
 /** YYYY-MM-DD -> a friendly "Mon, Jun 29" style label. */
 export function formatDateLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);

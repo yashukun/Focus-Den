@@ -21,11 +21,10 @@ describe('coerceState (deep validation)', () => {
       plan: {
         tickets: {
           '2026-07-02': [
-            { id: 't1', title: 'Write report', status: 'in_progress', priority: 'high', durationMin: 60, spentMs: 120_000, createdAt: 1_700_000_000_000 },
+            { id: 't1', title: 'Write report', status: 'in_progress', priority: 'high', durationMin: 60, createdAt: 1_700_000_000_000 },
           ],
         },
       },
-      tracking: { dateKey: '2026-07-02', ticketId: 't1', anchorMs: null },
     };
     expect(coerceState(JSON.parse(JSON.stringify(state)))).toEqual(state);
   });
@@ -161,6 +160,32 @@ describe('coerceState (deep validation)', () => {
     expect(c.deadlineMs).toBeUndefined();
   });
 
+  it('clamps scheduled start times into the day and drops garbage ones', () => {
+    const base = { title: 'A', status: 'todo', priority: 'med', createdAt: 1 };
+    const s = coerceState({
+      v: 2,
+      plan: {
+        tickets: {
+          '2026-07-02': [
+            { ...base, id: 't1', startMin: 555.4 },
+            { ...base, id: 't2', startMin: 99_999 },
+            { ...base, id: 't3', startMin: -30 },
+            { ...base, id: 't4', startMin: '9am' },
+            { ...base, id: 't5', startMin: Infinity },
+            { ...base, id: 't6' },
+          ],
+        },
+      },
+    })!;
+    const [a, b, c, d, e, f] = s.plan.tickets['2026-07-02'];
+    expect(a.startMin).toBe(555); // rounded
+    expect(b.startMin).toBe(1439); // clamped to the last minute of the day
+    expect(c.startMin).toBe(0);
+    expect(d.startMin).toBeUndefined();
+    expect(e.startMin).toBeUndefined();
+    expect(f.startMin).toBeUndefined();
+  });
+
   it('never copies __proto__/constructor keys from untrusted records', () => {
     const s = coerceState({
       v: 2,
@@ -172,10 +197,22 @@ describe('coerceState (deep validation)', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
-  it('nulls tracking when its target is malformed', () => {
-    expect(coerceState({ v: 2, tracking: { dateKey: 'nope', ticketId: 't1' } })!.tracking).toBeNull();
-    expect(coerceState({ v: 2, tracking: { dateKey: '2026-07-02' } })!.tracking).toBeNull();
-    expect(coerceState({ v: 2, tracking: 'garbage' })!.tracking).toBeNull();
+  it('drops the retired timer fields from older saves', () => {
+    const s = coerceState({
+      v: 2,
+      tracking: { dateKey: '2026-07-02', ticketId: 't1', anchorMs: 5 },
+      plan: {
+        tickets: {
+          '2026-07-02': [
+            { id: 't1', title: 'A', status: 'todo', priority: 'med', createdAt: 1, spentMs: 9000, notified: true },
+          ],
+        },
+      },
+    })!;
+    expect('tracking' in s).toBe(false);
+    const t = s.plan.tickets['2026-07-02'][0] as unknown as Record<string, unknown>;
+    expect(t.spentMs).toBeUndefined();
+    expect(t.notified).toBeUndefined();
   });
 
   it('migrates a bare v1 blob to a full valid state', () => {

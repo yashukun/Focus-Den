@@ -11,6 +11,6 @@
  */
 
 export { motionOK } from './motion';
-export { popIn, bump, cheer, sparkleBurst, countUp, modalEnter } from './effects';
+export { popIn, bump, cheer, sparkleBurst, countUp, modalEnter, zoomFromRect } from './effects';
 export type { BurstOptions, CountUpOptions } from './effects';
 export { useFxLayoutEffect, useBumpOnChange, useCelebrateOnIncrease } from './hooks';

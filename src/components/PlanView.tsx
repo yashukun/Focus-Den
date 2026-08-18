@@ -3,21 +3,19 @@
  * log), laid out as three panes: a compact always-visible month calendar in
  * the left rail, the selected day's task list in the middle, and a detail
  * panel that opens when a task is selected. Adding is title-first (type,
- * Enter) — the new task auto-selects so deadline / goal / priority / rich
+ * Enter) — the new task auto-selects so deadline / schedule / priority / rich
  * description are each one click away in the detail panel.
  *
  * Rule: current and upcoming days are editable; past days are locked (view only).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   addDays,
   dateString,
   formatDateLabel,
-  formatHMS,
+  formatSlotTime,
   isDateEditable,
-  isTiming,
-  liveSpentMs,
   monthMatrix,
   monthOf,
   monthTitle,
@@ -26,11 +24,12 @@ import {
   type State,
   type TicketPriority,
   type TicketStatus,
-  type TrackingState,
 } from '../core';
 import { store } from '../state/store';
 import { play } from '../audio';
+import { zoomFromRect } from '../fx';
 import { RichTextEditor, RichTextViewer, textToDescHtml } from './RichText';
+import { WeekGrid } from './WeekGrid';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
@@ -48,31 +47,33 @@ const PRIORITIES: { id: TicketPriority; label: string }[] = [
   { id: 'low', label: 'Low' },
 ];
 
-/** Time-goal presets for the detail panel (minutes; null = no goal). */
-const DURATION_PRESETS: { min: number | null; label: string }[] = [
-  { min: null, label: 'None' },
-  { min: 15, label: '15m' },
-  { min: 25, label: '25m' },
-  { min: 45, label: '45m' },
-  { min: 60, label: '1h' },
-  { min: 90, label: '1h 30' },
-  { min: 120, label: '2h' },
+/** Slot-length presets (minutes) — sizes a task, nothing is timed. */
+const LENGTHS: { min: number; label: string }[] = [
+  { min: 15, label: '15 min' },
+  { min: 30, label: '30 min' },
+  { min: 45, label: '45 min' },
+  { min: 60, label: '1 h' },
+  { min: 90, label: '1 h 30' },
+  { min: 120, label: '2 h' },
+  { min: 180, label: '3 h' },
+  { min: 240, label: '4 h' },
 ];
+
+function lengthLabel(min: number): string {
+  const preset = LENGTHS.find((l) => l.min === min);
+  if (preset) return preset.label;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h && m) return `${h} h ${m} min`;
+  if (h) return `${h} h`;
+  return `${m} min`;
+}
 
 function statusMeta(id: TicketStatus) {
   return STATUSES.find((s) => s.id === id)!;
 }
 function priorityMeta(id: TicketPriority) {
   return PRIORITIES.find((p) => p.id === id)!;
-}
-
-function fmtDuration(min?: number): string | null {
-  if (!min) return null;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h && m) return `${h}h ${m}m`;
-  if (h) return `${h}h`;
-  return `${m}m`;
 }
 
 /** "today 17:30" / "tomorrow 09:00" / "Aug 18, 17:30" */
@@ -102,13 +103,21 @@ export interface PlanViewProps {
   now: number;
 }
 
+type PlanMode = 'day' | 'week';
+
+// The screen remounts on every tab switch; remember the chosen mode in-session.
+let rememberedMode: PlanMode = 'day';
+
 export function PlanView({ state, now }: PlanViewProps) {
   const todayKey = dateString(now);
   const today = new Date(now);
+  const [mode, setMode] = useState<PlanMode>(rememberedMode);
   const [view, setView] = useState(() => ({ y: today.getFullYear(), m: today.getMonth() }));
   const [selectedDay, setSelectedDay] = useState(todayKey);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+  const weekPaneRef = useRef<HTMLDivElement>(null);
+  const weekZoomFrom = useRef<DOMRect | null>(null);
 
   const tickets = ticketsFor(state.plan, selectedDay);
   const selected = selectedId ? tickets.find((t) => t.id === selectedId) ?? null : null;
@@ -129,42 +138,100 @@ export function PlanView({ state, now }: PlanViewProps) {
     if (m !== view.m) setView({ y: Number(dateKey.slice(0, 4)), m });
   }
 
+  function pickMode(next: PlanMode) {
+    if (next === 'week' && mode === 'day') {
+      // The week view will zoom out of the selected day's calendar cell.
+      const cell = document.querySelector('.cal-selected') ?? document.querySelector('.cal-today');
+      weekZoomFrom.current = cell?.getBoundingClientRect() ?? null;
+    }
+    rememberedMode = next;
+    setMode(next);
+    setSelectedId(null);
+  }
+
+  // Runs right after the week pane mounts, before paint — FLIP from the cell.
+  useLayoutEffect(() => {
+    if (mode !== 'week') return;
+    const from = weekZoomFrom.current;
+    weekZoomFrom.current = null;
+    if (from) zoomFromRect(weekPaneRef.current?.querySelector('.week-card') ?? null, from);
+  }, [mode]);
+
+  const detail = selected && (
+    <DetailPanel
+      key={selected.id}
+      ticket={selected}
+      dateKey={selectedDay}
+      todayKey={todayKey}
+      now={now}
+      editable={editable}
+      onClose={() => setSelectedId(null)}
+    />
+  );
+
   return (
-    <div className="plan">
-      <aside className="plan-rail">
-        <MiniCalendar
-          state={state}
-          view={view}
-          setView={setView}
-          todayKey={todayKey}
-          selectedDay={selectedDay}
-          onPick={pickDay}
-        />
-      </aside>
+    <div className="plan-wrap">
+      <div className="plan-bar" role="group" aria-label="Planner view">
+        {(['day', 'week'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={`seg ${mode === m ? 'is-on' : ''}`}
+            aria-pressed={mode === m}
+            data-sound="switch"
+            onClick={() => pickMode(m)}
+          >
+            {m === 'day' ? 'Day' : 'Week'}
+          </button>
+        ))}
+      </div>
 
-      <DayPanel
-        key={selectedDay}
-        state={state}
-        dateKey={selectedDay}
-        todayKey={todayKey}
-        now={now}
-        selectedId={selected?.id ?? null}
-        onSelect={setSelectedId}
-        onAdded={(title) => setPendingTitle(title)}
-      />
+      {mode === 'week' ? (
+        <div className="plan plan-week" ref={weekPaneRef}>
+          <WeekGrid
+            state={state}
+            now={now}
+            todayKey={todayKey}
+            anchorDay={selectedDay}
+            selectedId={selected?.id ?? null}
+            onAnchor={pickDay}
+            onSelect={(dateKey, id) => {
+              pickDay(dateKey);
+              setSelectedId(id);
+            }}
+            onOpenDay={(dateKey) => {
+              pickDay(dateKey);
+              pickMode('day');
+            }}
+          />
+          {detail}
+        </div>
+      ) : (
+        <div className="plan">
+          <aside className="plan-rail">
+            <MiniCalendar
+              state={state}
+              view={view}
+              setView={setView}
+              todayKey={todayKey}
+              selectedDay={selectedDay}
+              onPick={pickDay}
+            />
+          </aside>
 
-      {selected && (
-        <DetailPanel
-          key={selected.id}
-          ticket={selected}
-          dateKey={selectedDay}
-          todayKey={todayKey}
-          now={now}
-          editable={editable}
-          tracking={state.tracking}
-          startable={selectedDay === todayKey && state.shift.status === 'working'}
-          onClose={() => setSelectedId(null)}
-        />
+          <DayPanel
+            key={selectedDay}
+            state={state}
+            dateKey={selectedDay}
+            todayKey={todayKey}
+            now={now}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelectedId}
+            onAdded={(title) => setPendingTitle(title)}
+          />
+
+          {detail}
+        </div>
       )}
     </div>
   );
@@ -277,11 +344,23 @@ function DayPanel({
 }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyTarget, setCopyTarget] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
   const editable = isDateEditable(dateKey, todayKey);
-  const tickets = ticketsFor(state.plan, dateKey);
+  // Scheduled slots first in time order; "anytime" tasks after, as entered.
+  const tickets = [...ticketsFor(state.plan, dateKey)].sort(
+    (a, b) => (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER),
+  );
   const rel = dateKey === todayKey ? 'Today' : dateKey === addDays(todayKey, 1) ? 'Tomorrow' : null;
-  const startable = dateKey === todayKey && state.shift.status === 'working';
   const done = tickets.filter((t) => t.status === 'done').length;
+
+  // An armed "Clear day" stands down on its own if the second click never comes.
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
 
   // The status popover closes on outside click / Escape.
   useEffect(() => {
@@ -314,11 +393,42 @@ function DayPanel({
         : 'Already up to date — nothing new to carry.',
     );
   }
+  // Inline two-step confirm — no native dialog (browsers can silently suppress
+  // window.confirm, which made the button look broken). Arms, then auto-disarms.
   function clearDay() {
-    if (window.confirm(`Let go of all ${tickets.length} task(s) for ${formatDateLabel(dateKey)}?`)) {
-      store.clearPlanDay(dateKey);
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setMsg(null);
+      return;
+    }
+    setConfirmClear(false);
+    store.clearPlanDay(dateKey);
+  }
+  function toggleCopyPicker() {
+    if (!copyOpen) {
+      const next = addDays(dateKey, 1);
+      setCopyTarget(next >= todayKey ? next : todayKey);
       setMsg(null);
     }
+    setCopyOpen(!copyOpen);
+  }
+  function copyToDate() {
+    if (!copyTarget) return;
+    if (copyTarget === dateKey) {
+      setMsg('That is this same day — pick another.');
+      return;
+    }
+    if (!isDateEditable(copyTarget, todayKey)) {
+      setMsg('Past days are locked — pick today or a future day.');
+      return;
+    }
+    const r = store.copyPlanDayToDay(dateKey, copyTarget);
+    setMsg(
+      r.tickets
+        ? `Copied ${r.tickets} task${plural(r.tickets)} to ${formatDateLabel(copyTarget)}.`
+        : `${formatDateLabel(copyTarget)} already has these.`,
+    );
+    setCopyOpen(false);
   }
 
   return (
@@ -351,8 +461,6 @@ function DayPanel({
               dateKey={dateKey}
               todayKey={todayKey}
               editable={editable}
-              startable={startable}
-              tracking={state.tracking}
               now={now}
               selected={t.id === selectedId}
               menuOpen={menuFor === t.id}
@@ -364,23 +472,61 @@ function DayPanel({
         </ul>
       )}
 
-      {editable && !startable && dateKey === todayKey && tickets.some((t) => t.status !== 'done') && (
-        <p className="muted plan-hint">Settle in and be <strong>In flow</strong> to start a task's timer.</p>
-      )}
-
-      {editable && tickets.length > 0 && (
+      {tickets.length > 0 && (
         <div className="day-foot">
           <div className="day-actions">
-            <button className="day-action" data-sound="none" onClick={copyNextDay} title="Copy these tasks to the next day">
-              Carry to tomorrow
+            {editable && (
+              <>
+                <button className="day-action" data-sound="none" onClick={copyNextDay} title="Copy these tasks to the next day">
+                  <span className="day-action-ico" aria-hidden="true">→</span>
+                  Carry to tomorrow
+                </button>
+                <button className="day-action" data-sound="none" onClick={copyWeek} title="Copy these tasks to the rest of this week">
+                  <span className="day-action-ico" aria-hidden="true">»</span>
+                  Carry to week
+                </button>
+              </>
+            )}
+            <button
+              className={`day-action ${copyOpen ? 'is-open' : ''}`}
+              data-sound="none"
+              aria-expanded={copyOpen}
+              onClick={toggleCopyPicker}
+              title="Copy these tasks to any other day"
+            >
+              <span className="day-action-ico" aria-hidden="true">⧉</span>
+              Copy to a day…
             </button>
-            <button className="day-action" data-sound="none" onClick={copyWeek} title="Copy these tasks to the rest of this week">
-              Carry to week
-            </button>
-            <button className="day-action day-action-danger" data-sound="none" onClick={clearDay} title="Remove every task for this day">
-              Clear day
-            </button>
+            {editable && (
+              <button
+                className={`day-action day-action-danger ${confirmClear ? 'is-armed' : ''}`}
+                data-sound="none"
+                onClick={clearDay}
+                title="Remove every task for this day"
+              >
+                <span className="day-action-ico" aria-hidden="true">✕</span>
+                {confirmClear ? `Really clear ${tickets.length} task${plural(tickets.length)}?` : 'Clear day'}
+              </button>
+            )}
           </div>
+          {copyOpen && (
+            <div className="day-copy-row">
+              <input
+                className="input day-copy-date"
+                type="date"
+                min={todayKey}
+                value={copyTarget}
+                onChange={(e) => setCopyTarget(e.target.value)}
+                aria-label="Day to copy these tasks to"
+              />
+              <button className="btn btn-sm" data-sound="none" disabled={!copyTarget} onClick={copyToDate}>
+                Copy
+              </button>
+              <button className="btn btn-sm" data-sound="none" onClick={() => setCopyOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          )}
           {msg && <p className="plan-msg tone-work">{msg}</p>}
         </div>
       )}
@@ -450,8 +596,6 @@ function TicketRow({
   dateKey,
   todayKey,
   editable,
-  startable,
-  tracking,
   now,
   selected,
   menuOpen,
@@ -463,8 +607,6 @@ function TicketRow({
   dateKey: string;
   todayKey: string;
   editable: boolean;
-  startable: boolean;
-  tracking: TrackingState | null;
   now: number;
   selected: boolean;
   menuOpen: boolean;
@@ -472,9 +614,6 @@ function TicketRow({
   onCloseMenu: () => void;
   onSelect: () => void;
 }) {
-  const spent = liveSpentMs(ticket, tracking, dateKey, now);
-  const timing = isTiming(ticket, tracking, dateKey);
-  const dur = fmtDuration(ticket.durationMin);
   const overdue = isOverdue(ticket, now);
   const done = ticket.status === 'done';
   const st = statusMeta(ticket.status);
@@ -498,7 +637,6 @@ function TicketRow({
         'ticket-pop',
         `prio-${ticket.priority}`,
         done ? 'ticket-done' : '',
-        timing ? 'ticket-timing-row' : '',
         selected ? 'is-selected' : '',
       ].filter(Boolean).join(' ')}
       onClick={onSelect}
@@ -537,23 +675,18 @@ function TicketRow({
             </button>
             {menuOpen && (
               <div className="status-menu" role="menu">
-                {STATUSES.map((s) => {
-                  const blocked = s.id === 'in_progress' && ticket.status !== 'in_progress' && !startable;
-                  return (
-                    <button
-                      key={s.id}
-                      role="menuitem"
-                      className={`status-menu-item st-${s.id} ${ticket.status === s.id ? 'is-on' : ''}`}
-                      disabled={blocked}
-                      title={blocked ? 'Settle in and be In flow to start the timer' : undefined}
-                      data-sound="switch"
-                      onClick={(e) => pickStatus(e, s.id)}
-                    >
-                      <span className={`status-menu-dot st-${s.id}`} aria-hidden="true" />
-                      {s.label}
-                    </button>
-                  );
-                })}
+                {STATUSES.map((s) => (
+                  <button
+                    key={s.id}
+                    role="menuitem"
+                    className={`status-menu-item st-${s.id} ${ticket.status === s.id ? 'is-on' : ''}`}
+                    data-sound="switch"
+                    onClick={(e) => pickStatus(e, s.id)}
+                  >
+                    <span className={`status-menu-dot st-${s.id}`} aria-hidden="true" />
+                    {s.label}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -561,19 +694,20 @@ function TicketRow({
 
         <span className="ticket-meta">
           <span className={`prio-badge prio-${ticket.priority}`}>{priorityMeta(ticket.priority).label}</span>
-          {dur && <span className="meta-chip mono">◔ {dur}</span>}
+          {ticket.startMin != null && (
+            <span className="meta-chip mono" title="Scheduled slot">
+              ◷ {formatSlotTime(ticket.startMin)}–{formatSlotTime(ticket.startMin + (ticket.durationMin ?? 60))}
+            </span>
+          )}
+          {ticket.startMin == null && ticket.durationMin != null && (
+            <span className="meta-chip mono" title="Task length">◔ {lengthLabel(ticket.durationMin)}</span>
+          )}
           {ticket.deadlineMs != null && (
             <span className={`meta-chip mono ${overdue ? 'is-over' : ''}`}>
               ⚑ {fmtDeadline(ticket.deadlineMs, todayKey)}
             </span>
           )}
           {(ticket.descHtml || ticket.notes) && <span className="meta-chip" title="Has description">≡</span>}
-          {(spent > 0 || timing) && (
-            <span className={`meta-chip mono ${timing ? 'tone-break' : ''}`}>
-              {timing && <span className="timing-dot" aria-hidden="true" />}
-              {formatHMS(spent)}
-            </span>
-          )}
         </span>
       </div>
     </li>
@@ -588,8 +722,6 @@ function DetailPanel({
   todayKey,
   now,
   editable,
-  startable,
-  tracking,
   onClose,
 }: {
   ticket: PlanTicket;
@@ -597,23 +729,20 @@ function DetailPanel({
   todayKey: string;
   now: number;
   editable: boolean;
-  startable: boolean;
-  tracking: TrackingState | null;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(ticket.title);
-  const [customGoal, setCustomGoal] = useState('');
-  const [customOpen, setCustomOpen] = useState(
-    !!ticket.durationMin && !DURATION_PRESETS.some((p) => p.min === ticket.durationMin),
-  );
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const spent = liveSpentMs(ticket, tracking, dateKey, now);
-  const timing = isTiming(ticket, tracking, dateKey);
-  const durationMs = ticket.durationMin ? ticket.durationMin * 60_000 : 0;
-  const overGoal = durationMs > 0 && spent >= durationMs;
   const overdue = isOverdue(ticket, now);
-  const dur = fmtDuration(ticket.durationMin);
   const initialDesc = ticket.descHtml ?? (ticket.notes ? textToDescHtml(ticket.notes) : '');
+
+  // An armed Delete stands down on its own if the second click never comes.
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const t = setTimeout(() => setConfirmDelete(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmDelete]);
 
   function saveTitle() {
     const trimmed = title.trim();
@@ -624,28 +753,19 @@ function DetailPanel({
     store.updatePlanTicket(dateKey, ticket.id, { title: trimmed });
   }
 
-  function setGoal(min: number | null) {
-    setCustomOpen(false);
-    store.updatePlanTicket(dateKey, ticket.id, { durationMin: min ?? undefined });
-  }
-
-  function saveCustomGoal() {
-    const min = Number(customGoal);
-    if (Number.isFinite(min) && min > 0) {
-      store.updatePlanTicket(dateKey, ticket.id, { durationMin: Math.round(min) });
-    }
-  }
-
   function saveDesc(html: string) {
     // Once a rich description exists, the legacy plain `notes` retires.
     store.updatePlanTicket(dateKey, ticket.id, { descHtml: html || undefined, notes: undefined });
   }
 
+  // Inline two-step confirm — no native dialog (browsers can suppress it).
   function remove() {
-    if (window.confirm(`Remove “${ticket.title}”?`)) {
-      store.removePlanTicket(dateKey, ticket.id);
-      onClose();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
     }
+    store.removePlanTicket(dateKey, ticket.id);
+    onClose();
   }
 
   return (
@@ -674,23 +794,19 @@ function DetailPanel({
       <div className="detail-field" role="group" aria-label="Status">
         <span className="detail-label">Status</span>
         <div className="detail-segs">
-          {STATUSES.map((s) => {
-            const blocked = s.id === 'in_progress' && ticket.status !== 'in_progress' && !startable;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                className={`seg st-${s.id} ${ticket.status === s.id ? 'is-on' : ''}`}
-                aria-pressed={ticket.status === s.id}
-                disabled={!editable || blocked}
-                title={blocked ? 'Settle in and be In flow to start the timer' : undefined}
-                data-sound="switch"
-                onClick={() => store.setPlanStatus(dateKey, ticket.id, s.id)}
-              >
-                {s.label}
-              </button>
-            );
-          })}
+          {STATUSES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`seg st-${s.id} ${ticket.status === s.id ? 'is-on' : ''}`}
+              aria-pressed={ticket.status === s.id}
+              disabled={!editable}
+              data-sound="switch"
+              onClick={() => store.setPlanStatus(dateKey, ticket.id, s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -747,77 +863,79 @@ function DetailPanel({
         </div>
       </div>
 
-      <div className="detail-field" role="group" aria-label="Time goal">
-        <span className="detail-label">Goal time</span>
-        {editable ? (
-          <div className="composer-chips">
-            {DURATION_PRESETS.map((p) => {
-              const on = !customOpen && (ticket.durationMin ?? null) === p.min;
-              return (
-                <button
-                  key={p.label}
-                  type="button"
-                  className={`chip ${on ? 'is-on' : ''}`}
-                  aria-pressed={on}
-                  data-sound="none"
-                  onClick={() => setGoal(p.min)}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className={`chip ${customOpen ? 'is-on' : ''}`}
-              aria-pressed={customOpen}
-              data-sound="none"
-              onClick={() => setCustomOpen((v) => !v)}
-            >
-              Custom
-            </button>
-            {customOpen && (
+      <div className="detail-field" role="group" aria-label="Scheduled slot">
+        <span className="detail-label">Scheduled</span>
+        <div className="detail-inline">
+          {editable ? (
+            <>
               <input
-                className="input composer-custom"
-                type="number"
-                min={1}
-                max={720}
-                step={5}
-                value={customGoal}
-                onChange={(e) => setCustomGoal(e.target.value)}
-                onBlur={saveCustomGoal}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                className="input detail-deadline"
+                type="time"
+                step={300}
+                value={ticket.startMin != null ? formatSlotTime(ticket.startMin) : ''}
+                onChange={(e) => {
+                  if (!e.target.value) {
+                    store.updatePlanTicket(dateKey, ticket.id, { startMin: undefined });
+                    return;
+                  }
+                  const [h, m] = e.target.value.split(':').map(Number);
+                  store.updatePlanTicket(dateKey, ticket.id, { startMin: h * 60 + m });
                 }}
-                placeholder={ticket.durationMin ? String(ticket.durationMin) : 'min'}
-                aria-label="Custom time goal in minutes"
-                autoFocus
+                aria-label="Scheduled start time"
               />
-            )}
-          </div>
-        ) : (
-          <span className="mono">{dur ?? '—'}</span>
-        )}
-      </div>
-
-      {(spent > 0 || durationMs > 0) && (
-        <div className={`ticket-time ${overGoal ? 'is-over' : ''}`}>
-          {timing && <span className="timing-dot" aria-hidden="true" />}
-          <span className="ticket-time-label mono">
-            {timing ? 'focusing · ' : ''}
-            {formatHMS(spent)}
-            {dur ? ` / ${dur}` : ''}
-            {overGoal ? ' ✓' : ''}
-          </span>
-          {durationMs > 0 && (
-            <span className="ticket-progress">
-              <span
-                className={`ticket-progress-fill ${overGoal ? 'tone-work' : 'tone-break'}`}
-                style={{ width: `${Math.min(100, (spent / durationMs) * 100)}%` }}
-              />
+              {ticket.startMin != null ? (
+                <>
+                  <span className="muted mono">
+                    – {formatSlotTime(ticket.startMin + (ticket.durationMin ?? 60))}
+                  </span>
+                  <button
+                    className="btn btn-sm"
+                    data-sound="none"
+                    onClick={() => store.updatePlanTicket(dateKey, ticket.id, { startMin: undefined })}
+                  >
+                    Clear
+                  </button>
+                </>
+              ) : (
+                <span className="muted detail-slot-hint">Anytime — pick a start to slot it on the week grid</span>
+              )}
+            </>
+          ) : (
+            <span className="mono">
+              {ticket.startMin != null
+                ? `${formatSlotTime(ticket.startMin)} – ${formatSlotTime(ticket.startMin + (ticket.durationMin ?? 60))}`
+                : '—'}
             </span>
           )}
         </div>
-      )}
+      </div>
+
+      <div className="detail-field" role="group" aria-label="Length">
+        <span className="detail-label">Length</span>
+        {editable ? (
+          <select
+            className="input detail-length"
+            value={ticket.durationMin ?? ''}
+            onChange={(e) => {
+              const min = e.target.value ? Number(e.target.value) : undefined;
+              store.updatePlanTicket(dateKey, ticket.id, { durationMin: min });
+            }}
+            aria-label="Task length"
+          >
+            <option value="">1 h · default</option>
+            {(ticket.durationMin && !LENGTHS.some((l) => l.min === ticket.durationMin)
+              ? [...LENGTHS, { min: ticket.durationMin, label: lengthLabel(ticket.durationMin) }].sort(
+                  (a, b) => a.min - b.min,
+                )
+              : LENGTHS
+            ).map((l) => (
+              <option key={l.min} value={l.min}>{l.label}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="mono">{ticket.durationMin ? lengthLabel(ticket.durationMin) : '1 h'}</span>
+        )}
+      </div>
 
       <div className="detail-field detail-desc" role="group" aria-label="Description">
         <span className="detail-label">Description</span>
@@ -845,8 +963,12 @@ function DetailPanel({
             >
               → Tomorrow
             </button>
-            <button className="btn btn-sm btn-danger" data-sound="none" onClick={remove}>
-              Delete
+            <button
+              className={`btn btn-sm btn-danger ${confirmDelete ? 'is-armed' : ''}`}
+              data-sound="none"
+              onClick={remove}
+            >
+              {confirmDelete ? 'Really delete?' : 'Delete'}
             </button>
           </div>
         )}

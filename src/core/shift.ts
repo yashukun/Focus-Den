@@ -79,7 +79,6 @@ export function defaultState(): State {
     week: { key: null, days: {}, perfectAwarded: false },
     history: [],
     plan: { tickets: {} },
-    tracking: null,
   };
 }
 

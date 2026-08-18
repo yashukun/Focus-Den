@@ -9,46 +9,10 @@
  */
 
 import { addDays } from './dates';
-import type { PlanState, PlanTicket, TrackingState } from './types';
+import type { PlanState, PlanTicket } from './types';
 
 export function freshPlan(): PlanState {
   return { tickets: {} };
-}
-
-/**
- * Time spent on a ticket including the live, in-progress slice when it is the
- * actively-tracked ticket and currently accruing (anchorMs set ⇒ Working).
- */
-export function liveSpentMs(
-  ticket: PlanTicket,
-  tracking: TrackingState | null,
-  dateKey: string,
-  now: number,
-): number {
-  const base = ticket.spentMs ?? 0;
-  if (
-    tracking &&
-    tracking.ticketId === ticket.id &&
-    tracking.dateKey === dateKey &&
-    tracking.anchorMs != null
-  ) {
-    return base + Math.max(0, now - tracking.anchorMs);
-  }
-  return base;
-}
-
-/** Whether this ticket is the one currently being timed (and accruing). */
-export function isTiming(
-  ticket: PlanTicket,
-  tracking: TrackingState | null,
-  dateKey: string,
-): boolean {
-  return (
-    !!tracking &&
-    tracking.ticketId === ticket.id &&
-    tracking.dateKey === dateKey &&
-    tracking.anchorMs != null
-  );
 }
 
 /** Tickets for a day (never null). */
@@ -79,7 +43,7 @@ export function addTicket(
 export type TicketPatch = Partial<
   Pick<
     PlanTicket,
-    'title' | 'notes' | 'descHtml' | 'deadlineMs' | 'status' | 'priority' | 'durationMin'
+    'title' | 'notes' | 'descHtml' | 'deadlineMs' | 'status' | 'priority' | 'durationMin' | 'startMin'
   >
 >;
 
@@ -115,6 +79,29 @@ export function removeTicket(
   return withDay(plan, dateKey, next);
 }
 
+/** Move a ticket to another day (both ends must be current/future). */
+export function moveTicketToDay(
+  plan: PlanState,
+  fromKey: string,
+  id: string,
+  toKey: string,
+  todayKey: string,
+): PlanState {
+  if (fromKey === toKey) return plan;
+  if (!isDateEditable(fromKey, todayKey) || !isDateEditable(toKey, todayKey)) return plan;
+  const list = ticketsFor(plan, fromKey);
+  const ticket = list.find((t) => t.id === id);
+  if (!ticket) return plan;
+  return {
+    ...plan,
+    tickets: {
+      ...plan.tickets,
+      [fromKey]: list.filter((t) => t.id !== id),
+      [toKey]: [...ticketsFor(plan, toKey), ticket],
+    },
+  };
+}
+
 /** Move a ticket to the following day (both ends are current/future). */
 export function moveTicketToNextDay(
   plan: PlanState,
@@ -122,17 +109,5 @@ export function moveTicketToNextDay(
   id: string,
   todayKey: string,
 ): PlanState {
-  if (!isDateEditable(dateKey, todayKey)) return plan;
-  const list = ticketsFor(plan, dateKey);
-  const ticket = list.find((t) => t.id === id);
-  if (!ticket) return plan;
-  const nextKey = addDays(dateKey, 1);
-  return {
-    ...plan,
-    tickets: {
-      ...plan.tickets,
-      [dateKey]: list.filter((t) => t.id !== id),
-      [nextKey]: [...ticketsFor(plan, nextKey), ticket],
-    },
-  };
+  return moveTicketToDay(plan, dateKey, id, addDays(dateKey, 1), todayKey);
 }

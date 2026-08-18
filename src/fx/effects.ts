@@ -125,6 +125,28 @@ export function countUp(el: Target, to: number, { duration = 800, prefix = '' }:
  * Dialog entrance: the card rises into place, then children matching
  * `staggerSelector` (optional) cascade in behind it.
  */
+/**
+ * FLIP-style zoom: an element grows into place out of another rectangle —
+ * e.g. the Week view rising from its day cell in the mini calendar. `from` is
+ * visual-viewport px (getBoundingClientRect); transforms apply in local CSS
+ * px, so the global `html { zoom }` factor is divided out of the translation.
+ */
+export function zoomFromRect(el: Target, from: DOMRect): void {
+  if (!el || !motionOK()) return;
+  const to = el.getBoundingClientRect();
+  if (!to.width || !to.height || !from.width || !from.height) return;
+  const zoom = Number(getComputedStyle(document.documentElement).zoom) || 1;
+  animate(el, {
+    x: { from: (from.left + from.width / 2 - (to.left + to.width / 2)) / zoom, to: 0 },
+    y: { from: (from.top + from.height / 2 - (to.top + to.height / 2)) / zoom, to: 0 },
+    scaleX: { from: Math.max(0.04, from.width / to.width), to: 1 },
+    scaleY: { from: Math.max(0.04, from.height / to.height), to: 1 },
+    opacity: { from: 0.3, to: 1 },
+    duration: 480,
+    ease: 'outQuint',
+  });
+}
+
 export function modalEnter(card: Target, staggerSelector?: string): void {
   if (!card || !motionOK()) return;
   const tl = createTimeline({ defaults: { ease: 'outQuad' } });

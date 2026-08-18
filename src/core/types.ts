@@ -96,30 +96,20 @@ export interface PlanTicket {
   deadlineMs?: number;
   status: TicketStatus;
   priority: TicketPriority;
-  /** optional planned duration in minutes */
+  /**
+   * Scheduled start within the day, minutes from local midnight (0..1439).
+   * A ticket with a start time occupies a slot on the week grid, `durationMin`
+   * long (an hour when unset); without one it sits in the day's "anytime" list.
+   */
+  startMin?: number;
+  /** slot length in minutes (a reminder of the planned window, not a timer) */
   durationMin?: number;
-  /** committed working time tracked against this ticket, in ms */
-  spentMs?: number;
-  /** whether the duration-complete notification has already fired */
-  notified?: boolean;
   createdAt: number;
 }
 
 /** Day planner: tickets keyed by YYYY-MM-DD. */
 export interface PlanState {
   tickets: Record<string, PlanTicket[]>;
-}
-
-/**
- * The single ticket currently being timed. Its elapsed accrues only while the
- * shift status is `working` — `anchorMs` is the epoch ms accrual (re)started,
- * or null when paused (on break / offline). Time stays in sync with the shift's
- * worked clock.
- */
-export interface TrackingState {
-  dateKey: string;
-  ticketId: string;
-  anchorMs: number | null;
 }
 
 /** Equipped cosmetic slots — one item per slot. */
@@ -185,8 +175,6 @@ export interface State {
   week: WeekState;
   history: HistoryEntry[];
   plan: PlanState;
-  /** the ticket currently being timed against worked time, or null */
-  tracking: TrackingState | null;
 }
 
 /** Shop item categories. */

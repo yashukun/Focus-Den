@@ -29,7 +29,6 @@ import type {
   ThemeId,
   TicketPriority,
   TicketStatus,
-  TrackingState,
   WeekState,
 } from './types';
 
@@ -250,11 +249,10 @@ function coerceTicket(v: unknown): PlanTicket | null {
   if (descHtml) ticket.descHtml = descHtml;
   const deadlineMs = numOrNull(t.deadlineMs, 0, MAX_EPOCH_MS);
   if (deadlineMs !== null) ticket.deadlineMs = deadlineMs;
+  const startMin = numOrNull(t.startMin, 0, 24 * 60 - 1);
+  if (startMin !== null) ticket.startMin = Math.round(startMin);
   const durationMin = numOrNull(t.durationMin, 1, 24 * 60);
   if (durationMin !== null) ticket.durationMin = Math.round(durationMin);
-  const spentMs = numOrNull(t.spentMs, 0, MAX_SPAN_MS);
-  if (spentMs !== null) ticket.spentMs = spentMs;
-  if (typeof t.notified === 'boolean') ticket.notified = t.notified;
   return ticket;
 }
 
@@ -274,15 +272,6 @@ function coercePlan(v: unknown): PlanState {
     days += 1;
   }
   return { tickets };
-}
-
-function coerceTracking(v: unknown): TrackingState | null {
-  if (!v || typeof v !== 'object') return null;
-  const t = v as Partial<TrackingState>;
-  const dateKey = dateKeyOrNull(t.dateKey);
-  const ticketId = str(t.ticketId, MAX_ID);
-  if (!dateKey || !ticketId) return null;
-  return { dateKey, ticketId, anchorMs: numOrNull(t.anchorMs, 0, MAX_EPOCH_MS) };
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -311,6 +300,5 @@ export function coerceState(raw: unknown): State | null {
     week: coerceWeek(obj.week, base.week),
     history: coerceHistory(obj.history),
     plan: coercePlan(obj.plan),
-    tracking: coerceTracking(obj.tracking),
   };
 }

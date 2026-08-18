@@ -59,20 +59,17 @@ describe('store: task fields (deadline, rich description)', () => {
   });
 });
 
-describe('store: blocked status', () => {
-  it('blocking the timed intention stops its timer, like done does', () => {
-    const now = Date.now();
-    const today = dateString(now);
-    store.clockIn(now);
+describe('store: status changes', () => {
+  it('statuses flip freely — no shift or timer required', () => {
+    const today = dateString(Date.now());
     store.addPlanTicket(today, { title: 'Deep work' });
     const id = ticketsFor(store.getState().plan, today)[0].id;
+
     store.setPlanStatus(today, id, 'in_progress');
-    expect(store.getState().tracking?.ticketId).toBe(id);
+    expect(ticketsFor(store.getState().plan, today)[0].status).toBe('in_progress');
 
     store.setPlanStatus(today, id, 'blocked');
-    const s = store.getState();
-    expect(s.tracking).toBeNull();
-    expect(ticketsFor(s.plan, today)[0].status).toBe('blocked');
+    expect(ticketsFor(store.getState().plan, today)[0].status).toBe('blocked');
   });
 });
 
