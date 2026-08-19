@@ -143,6 +143,23 @@ export function RoomScene({
           <stop offset="64%" stopColor="#000000" stopOpacity="0" />
           <stop offset="100%" stopColor="#180e04" stopOpacity="0.1" />
         </radialGradient>
+        {/* Night-time monitor bloom — a soft halo, never a hard-edged box */}
+        <radialGradient id={ref('screenBloom')} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#9cc7f4" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="#9cc7f4" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#9cc7f4" stopOpacity="0" />
+        </radialGradient>
+        {/* Lamp cone fades with distance from the bulb */}
+        <linearGradient id={ref('lampCone')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffd97d" stopOpacity="0.34" />
+          <stop offset="100%" stopColor="#ffd97d" stopOpacity="0.05" />
+        </linearGradient>
+        {/* Neon aura for the glow outfit (soft, behind the avatar) */}
+        <radialGradient id={ref('auraGlow')} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#e07bff" stopOpacity="0.4" />
+          <stop offset="60%" stopColor="#e07bff" stopOpacity="0.16" />
+          <stop offset="100%" stopColor="#e07bff" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
       {/* ── Wall + floor (with soft shading for depth) ───────────────── */}
@@ -212,17 +229,19 @@ export function RoomScene({
           shapeRendering="geometricPrecision" />
         {raining && (
           <g clipPath={`url(#${ref('window-clip')})`}>
-            {[20, 27, 34, 41, 48].map((x, i) => (
+            {/* streaks cover the full pane; varied lengths so it reads as
+                weather, not a pattern */}
+            {([[20, 6], [26, 8], [33, 5], [39, 7], [45, 6], [52, 8]] as const).map(([x, h], i) => (
               <rect
                 key={x}
                 className="scene-rain"
                 x={x}
                 y="21"
                 width="1"
-                height="6"
+                height={h}
                 fill="#bcd6f0"
                 opacity="0.8"
-                style={{ animationDelay: `${i * 0.22}s` }}
+                style={{ animationDelay: `${i * 0.17}s` }}
               />
             ))}
           </g>
@@ -348,16 +367,18 @@ export function RoomScene({
         <rect x="110" y="115" width="22" height="3" fill="#5f3f26" />
       </g>
 
-      {/* ── Dual monitor (owned, left of main) ───────────────────────── */}
+      {/* ── Dual monitor (owned, left of main) — feet ON the desk (28+),
+          never hanging past its edge ────────────────────────────────── */}
       {has('room_dualmon') && (
         <g>
-          <rect x="18" y="50" width="30" height="26" fill="#2a2a30" />
-          <rect x="21" y="53" width="24" height="20" fill="#4f8fd0" />
-          <rect x="24" y="57" width="14" height="2" fill="#bfe0ff" />
-          <rect x="24" y="62" width="18" height="2" fill="#9ccaf5" />
-          <rect x="24" y="67" width="10" height="2" fill="#bfe0ff" />
-          <rect x="31" y="76" width="4" height="8" fill="#3b3b42" />
-          <rect x="26" y="84" width="14" height="2" fill="#3b3b42" />
+          <rect x="28" y="50" width="24" height="26" fill="#2a2a30" />
+          <rect x="29" y="51" width="22" height="1" fill="#43434c" />
+          <rect x="31" y="53" width="18" height="20" fill="#4f8fd0" />
+          <rect x="33" y="57" width="12" height="2" fill="#bfe0ff" />
+          <rect x="33" y="62" width="14" height="2" fill="#9ccaf5" />
+          <rect x="33" y="67" width="9" height="2" fill="#bfe0ff" />
+          <rect x="38" y="76" width="4" height="8" fill="#3b3b42" />
+          <rect x="33" y="84" width="14" height="2" fill="#3b3b42" />
         </g>
       )}
 
@@ -378,8 +399,8 @@ export function RoomScene({
         <rect x="60" y="68" width="8" height="2" fill="#9ccaf5" />
         <rect x="70" y="68" width="16" height="2" fill="#bfe0ff" />
         <rect className="scene-cursor" x="60" y="72" width="2" height="3" fill="#eaf4ff" />
-        {/* power LED */}
-        <rect x="101" y="78" width="2" height="1" fill="#7fdc8f" />
+        {/* power LED — bottom-LEFT bezel corner (the cat naps over the right) */}
+        <rect x="57" y="78" width="2" height="1" fill="#7fdc8f" />
       </g>
 
       {/* ── Mousepad + mouse (right of the keyboard spot) ────────────── */}
@@ -395,8 +416,11 @@ export function RoomScene({
           <rect x="48" y="79" width="8" height="7" fill="#e7e2d8" />
           <rect x="48" y="79" width="8" height="2" fill="#f3efe6" />
           <rect x="56" y="81" width="2" height="3" fill="#cfc9bd" />
-          <rect x="49" y="76" width="2" height="2" fill="#d8d2c6" opacity="0.7" />
-          <rect x="52" y="75" width="2" height="2" fill="#d8d2c6" opacity="0.5" />
+          {/* steam wisps drift up and fade, offset so they alternate */}
+          <rect className="scene-steam" x="49" y="76" width="2" height="2"
+            fill="#d8d2c6" opacity="0.7" />
+          <rect className="scene-steam" x="52" y="75" width="2" height="2"
+            fill="#d8d2c6" opacity="0.5" style={{ animationDelay: '1.4s' }} />
         </g>
       )}
 
@@ -410,13 +434,16 @@ export function RoomScene({
         </g>
       )}
 
-      {/* ── Lamp (owned) — structure (warm light drawn later) ─────────── */}
+      {/* ── Lamp (owned) — structure (warm light drawn later) ──────────
+          Everything shares ONE center line (x=116): base, stem, shade, bulb.
+          The cone later flares from the shade's BOTTOM opening (111–121). */}
       {has('room_lamp') && (
         <g>
-          <rect x="112" y="82" width="10" height="4" fill="#555" />
-          <rect x="116" y="62" width="2" height="20" fill="#555" />
-          <polygon points="106,56 124,56 120,64 110,64" fill="#f2c14e" />
-          <rect x="112" y="63" width="6" height="2" fill="#fff6d0" />
+          <rect x="111" y="82" width="10" height="4" fill="#555" />
+          <rect x="111" y="82" width="10" height="1" fill="#6a6a6a" />
+          <rect x="115" y="62" width="2" height="20" fill="#555" />
+          <polygon points="107,56 125,56 121,64 111,64" fill="#f2c14e" />
+          <rect x="113" y="63" width="6" height="2" fill="#fff6d0" />
         </g>
       )}
 
@@ -424,15 +451,27 @@ export function RoomScene({
       <ellipse cx="80" cy="60" rx="46" ry="32" fill={`url(#${ref('monitorGlow')})`}
         shapeRendering="geometricPrecision" />
       {has('room_dualmon') && (
-        <ellipse cx="33" cy="62" rx="26" ry="22" fill={`url(#${ref('monitorGlow')})`}
+        <ellipse cx="40" cy="62" rx="24" ry="21" fill={`url(#${ref('monitorGlow')})`}
           shapeRendering="geometricPrecision" />
       )}
       {has('room_lamp') && (
-        <ellipse cx="116" cy="66" rx="28" ry="26" fill={`url(#${ref('lampGlow')})`}
+        <ellipse cx="116" cy="64" rx="28" ry="26" fill={`url(#${ref('lampGlow')})`}
           shapeRendering="geometricPrecision" />
       )}
       <ellipse cx="80" cy="82" rx="26" ry="30" fill={`url(#${ref('charGlow')})`}
         shapeRendering="geometricPrecision" />
+      {/* neon aura for the glow outfit — soft halo BEHIND the avatar, pulsing */}
+      {isGlow && (
+        <ellipse
+          className="scene-glow"
+          cx="80"
+          cy="87"
+          rx="27"
+          ry="28"
+          fill={`url(#${ref('auraGlow')})`}
+          shapeRendering="geometricPrecision"
+        />
+      )}
 
       {/* ── Character (hero) — grounded, with a gentle scale-up ───────── */}
       <ellipse cx="80" cy="112" rx="20" ry="4" fill={SHADOW} opacity="0.18"
@@ -545,26 +584,28 @@ export function RoomScene({
         )}
       </g>
 
-      {/* ── Desk cat (owned, animated) ───────────────────────────────── */}
+      {/* ── Desk cat (owned, animated) ───────────────────────────────────
+          Sits ON the mousepad (as cats do), clear of the lamp at x111+.
+          The tail hangs to the LEFT (the lamp owns the right side). */}
       {has('room_cat') && (
         <g>
-          <ellipse cx="114" cy="86" rx="9" ry="2" fill={SHADOW} opacity="0.16"
+          <ellipse cx="106" cy="86" rx="9" ry="2" fill={SHADOW} opacity="0.16"
             shapeRendering="geometricPrecision" />
-          <rect x="106" y="74" width="16" height="12" fill="#8a8076" />
-          <rect x="106" y="74" width="16" height="2" fill="#9a9086" />
-          <polygon points="106,74 109,68 112,74" fill="#8a8076" />
-          <polygon points="116,74 119,68 122,74" fill="#8a8076" />
+          <rect x="98" y="74" width="16" height="12" fill="#8a8076" />
+          <rect x="98" y="74" width="16" height="2" fill="#9a9086" />
+          <polygon points="98,74 101,68 104,74" fill="#8a8076" />
+          <polygon points="108,74 111,68 114,74" fill="#8a8076" />
           <rect
             className="scene-cat-tail"
-            x="121"
-            y="80"
+            x="89"
+            y="79"
             width="9"
             height="3"
             fill="#8a8076"
           />
-          <rect className="scene-cat-eye" x="109" y="78" width="2" height="3" fill="#2c2c2c" />
-          <rect className="scene-cat-eye" x="116" y="78" width="2" height="3" fill="#2c2c2c" />
-          <rect x="112" y="81" width="3" height="2" fill="#caa0a0" />
+          <rect className="scene-cat-eye" x="101" y="78" width="2" height="3" fill="#2c2c2c" />
+          <rect className="scene-cat-eye" x="108" y="78" width="2" height="3" fill="#2c2c2c" />
+          <rect x="104" y="81" width="3" height="2" fill="#caa0a0" />
         </g>
       )}
 
@@ -572,36 +613,23 @@ export function RoomScene({
       <rect x="0" y="0" width="160" height="144" fill="var(--scene-night)" />
 
       {/* ── On-top lighting (localized; does not wash the avatar) ─────── */}
-      {/* warm pool cast by the lamp onto the desk */}
+      {/* warm cone cast by the lamp — flares straight down from the shade's
+          bottom opening (111–121, center 116) and fades with distance */}
       {has('room_lamp') && (
-        <polygon points="110,63 124,63 132,88 100,88" fill="#ffd97d" opacity="0.2"
+        <polygon points="111,64 121,64 130,88 102,88" fill={`url(#${ref('lampCone')})`}
           shapeRendering="geometricPrecision" />
       )}
-      {/* faint monitor bloom on the upper screen at night (above the head) */}
-      <rect
+      {/* soft monitor bloom at night — a halo around the screen, no edges */}
+      <ellipse
         className="scene-screen-glow"
-        x="56"
-        y="44"
-        width="48"
-        height="18"
-        fill="#9cc7f4"
+        cx="80"
+        cy="61"
+        rx="35"
+        ry="21"
+        fill={`url(#${ref('screenBloom')})`}
         opacity="var(--scene-screen-glow, 0)"
         shapeRendering="geometricPrecision"
       />
-
-      {/* glow outfit aura */}
-      {isGlow && (
-        <rect
-          className="scene-glow"
-          x="66"
-          y="78"
-          width="28"
-          height="28"
-          fill="none"
-          stroke="#e07bff"
-          strokeWidth="2"
-        />
-      )}
 
       {/* string lights (owned, animated) */}
       {has('room_string_lights') && (

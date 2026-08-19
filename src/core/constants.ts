@@ -43,6 +43,7 @@ export const DASH_WIDGET_IDS: DashWidgetId[] = [
   'den',
   'clock',
   'note',
+  'media',
 ];
 
 /** Fresh-den layout: mirrors the classic dashboard, with the plan card on. */

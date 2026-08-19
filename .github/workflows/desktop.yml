@@ -1,0 +1,58 @@
+# Desktop installers: on every v* tag (or manual run), build the macOS
+# universal .dmg and the Windows .exe/.msi, sign the update artifacts with the
+# project's updater key, and attach everything — plus the updater's
+# latest.json — to the GitHub Release for that tag. The in-app updater
+# (Settings → Desktop app) reads that latest.json.
+#
+# Secrets required:
+#   TAURI_SIGNING_PRIVATE_KEY           — updater minisign private key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  — its password (empty string here)
+
+name: Desktop builds
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: windows-latest
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Focus Den ${{ github.ref_name }}'
+          releaseBody: 'Desktop installers for this release. macOS: right-click → Open on first launch (unsigned for now).'
+          args: ${{ matrix.args }}

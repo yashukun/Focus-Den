@@ -37,3 +37,7 @@ pull-db.py
 
 # Claude Code: local settings stay out; .claude/agents/ is shareable project config
 .claude/settings.local.json
+
+# Tauri (desktop shell)
+src-tauri/target
+src-tauri/gen

@@ -17,14 +17,18 @@ every screen. A document-level click listener plays button sounds — see
 ## Screens
 
 - **Home.tsx** — landing page; hero renders the visitor's real den
-  (`RoomScene`), one CTA (`Focus`), feature grid, version stamp.
+  (`RoomScene`), one CTA (`Focus`), feature grid, version stamp. Feature
+  cards reveal on first scroll into view (IntersectionObserver adds
+  `.is-revealed` once, then unobserves — cards animate exactly once).
 - **Dashboard.tsx** — the Today page, built from arrangeable widget cards.
   Layout lives in `settings.dashWidgets` (order = arrangement, presence =
   enabled); wide cards fill the main column, small ones the side rail
   (`WIDGET_META.side`). Widgets: `focus` (settle-in / live shift / done hero;
   never hideable), `plan` (see below), `breathers`, `wins` (both active-shift
   only), `points`, `week`, `den`, `clock`, `note` (free text →
-  `settings.dashNote`). "✎ Customize" toggles edit mode: move ↑↓ within a
+  `settings.dashNote`), `media` (Now playing — desktop only, hidden from the
+  web's tray entirely; `MediaCard.tsx` polls the Rust media commands).
+  "✎ Customize" toggles edit mode: move ↑↓ within a
   column, hide ✕, add from the tray, reset. Layout mutations read
   `store.getState()` (not render-time props) so rapid clicks can't act on a
   stale list. The `plan` widget shows today's tickets (check-off, quick-add,
@@ -53,7 +57,9 @@ every screen. A document-level click listener plays button sounds — see
 - **RoomView.tsx** — big `RoomScene` + Customize (equip cosmetics per slot,
   prop checklist) / **Shop.tsx** (embedded; cards celebrate purchases via fx).
 - **Settings.tsx** — theme/appearance, soundscape picker + volume, export/
-  import JSON, replay onboarding, armed reset.
+  import JSON, replay onboarding, armed reset. **DesktopUpdate.tsx** renders
+  a "Desktop app" card (self-update via the Tauri updater) only when running
+  in the desktop shell — it returns null on the web.
 - **SummaryModal.tsx** — end-of-day stats; entrance timeline + points
   roll-up (`countUp`).
 - **Onboarding.tsx** — first-run explainer; `DeepWork.tsx` — full-screen

@@ -26,6 +26,7 @@ box; `npm run dev:all` runs both when you're working on that setup.
 | `npm test` / `npm test --prefix server` | frontend / server tests |
 | `npm run test:watch` | frontend tests on save |
 | `npm run build` | typecheck + production bundle → `dist/` |
+| `npx tauri dev` / `npx tauri build` | the desktop app (see [desktop.md](desktop.md)) |
 
 CI (GitHub Actions) runs typecheck + tests + build + a production-dependency
 audit on every push/PR to `main`.

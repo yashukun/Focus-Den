@@ -6,6 +6,7 @@
 import { useRef, useState } from 'react';
 import { SOUNDSCAPE_IDS, SOUNDSCAPE_LABELS, type Appearance, type State, type ThemeId } from '../core';
 import { store } from '../state/store';
+import { DesktopUpdate } from './DesktopUpdate';
 import { useArmedConfirm } from './useArmedConfirm';
 
 export interface SettingsProps {
@@ -169,6 +170,8 @@ export function Settings({ state }: SettingsProps) {
         </div>
         {msg && <p className="muted setting-msg">{msg}</p>}
       </section>
+
+      <DesktopUpdate />
 
       <section className="card manage-danger">
         <div className="card-head"><h2>Danger zone</h2></div>

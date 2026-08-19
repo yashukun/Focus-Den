@@ -5,6 +5,7 @@
  * returns here.
  */
 
+import { useEffect, useRef } from 'react';
 import { RoomScene } from '../room/RoomScene';
 import type { State } from '../core';
 
@@ -47,6 +48,33 @@ const FEATURES = [
 ];
 
 export function Home({ state, onFocus }: HomeProps) {
+  // Feature cards reveal as they scroll into view — once each, then they stay
+  // put (unobserved after the first reveal). Without IntersectionObserver
+  // everything shows immediately.
+  const featuresRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const root = featuresRef.current;
+    if (!root) return;
+    const cards = Array.from(root.querySelectorAll<HTMLElement>('.home-feature'));
+    if (typeof IntersectionObserver === 'undefined') {
+      cards.forEach((c) => c.classList.add('is-revealed'));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            e.target.classList.add('is-revealed');
+            io.unobserve(e.target);
+          }
+        }
+      },
+      { threshold: 0.15 },
+    );
+    cards.forEach((c) => io.observe(c));
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div className="home">
       <div className="home-inner">
@@ -82,12 +110,12 @@ export function Home({ state, onFocus }: HomeProps) {
           </p>
         </section>
 
-        <section className="home-features" aria-label="What Focus Den offers">
+        <section ref={featuresRef} className="home-features" aria-label="What Focus Den offers">
           {FEATURES.map((f, i) => (
             <article
               key={f.title}
-              className="home-feature home-rise"
-              style={{ animationDelay: `${420 + i * 70}ms` }}
+              className="home-feature"
+              style={{ animationDelay: `${(i % 3) * 80}ms` }}
             >
               <span className="home-feature-emoji" aria-hidden="true">{f.emoji}</span>
               <h2 className="home-feature-title">{f.title}</h2>

@@ -137,7 +137,7 @@ describe('render smoke', () => {
     expect(done).toContain('Today’s report');
     expect(done).toContain('Not completed');
     expect(done).toContain('Write the doc');
-    expect(done).toContain('Carry unfinished to tomorrow');
+    expect(done).toContain('Move to tomorrow');
     expect(done).toContain('Tomorrow');
     expect(done).toContain('Plan sprint');
   });

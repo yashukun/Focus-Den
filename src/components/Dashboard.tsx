@@ -55,8 +55,10 @@ import {
   type Status,
 } from '../core';
 import { store } from '../state/store';
+import { isTauri } from '../state/desktop';
 import { play } from '../audio';
 import { RoomScene } from '../room/RoomScene';
+import { MediaCard } from './MediaCard';
 import { STATUS_META } from './statusMeta';
 import { useArmedConfirm } from './useArmedConfirm';
 import { WeekStreak } from './WeekStreak';
@@ -73,7 +75,7 @@ const SWITCH_ORDER: { status: Status; key?: BreakKey }[] = [
 /** Display metadata per widget. `side: true` → the narrow right rail. */
 const WIDGET_META: Record<
   DashWidgetId,
-  { label: string; icon: string; side: boolean; activeOnly?: boolean }
+  { label: string; icon: string; side: boolean; activeOnly?: boolean; desktopOnly?: boolean }
 > = {
   focus: { label: 'Focus timer', icon: '⏱', side: false },
   plan: { label: 'Today’s plan', icon: '🗓', side: false },
@@ -84,6 +86,7 @@ const WIDGET_META: Record<
   den: { label: 'Your den', icon: '🛋', side: true },
   clock: { label: 'Clock', icon: '🕰', side: true },
   note: { label: 'Sticky note', icon: '📝', side: true },
+  media: { label: 'Now playing', icon: '🎧', side: true, desktopOnly: true },
 };
 
 export interface DashboardProps {
@@ -98,10 +101,14 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
   const widgets = state.settings.dashWidgets;
   const active = isActive(state.shift.status);
 
-  // Cards that only make sense mid-shift vanish while idle — except in edit
-  // mode, where a placeholder keeps them arrangeable.
-  const visible = widgets.filter((id) => editing || active || !WIDGET_META[id].activeOnly);
-  const hidden = DASH_WIDGET_IDS.filter((id) => !widgets.includes(id));
+  // Desktop-only widgets (Now playing) don't exist on the web at all; cards
+  // that only make sense mid-shift vanish while idle — except in edit mode,
+  // where a placeholder keeps them arrangeable.
+  const available = (id: DashWidgetId) => !WIDGET_META[id].desktopOnly || isTauri();
+  const visible = widgets.filter(
+    (id) => available(id) && (editing || active || !WIDGET_META[id].activeOnly),
+  );
+  const hidden = DASH_WIDGET_IDS.filter((id) => available(id) && !widgets.includes(id));
   const mainIds = visible.filter((id) => !WIDGET_META[id].side);
   const sideIds = visible.filter((id) => WIDGET_META[id].side);
 
@@ -150,6 +157,8 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
         return <ClockCard now={now} />;
       case 'note':
         return <NoteCard note={state.settings.dashNote} />;
+      case 'media':
+        return <MediaCard />;
     }
   }
 
@@ -889,8 +898,9 @@ function TodayReport({
                   </li>
                 ))}
               </ul>
+              {/* Sits under the "Not completed" list, so the referent is clear. */}
               <button className="btn btn-sm" data-sound="none" onClick={carry}>
-                → Carry unfinished to tomorrow
+                → Move to tomorrow
               </button>
             </div>
           )}

@@ -151,7 +151,8 @@ export type DashWidgetId =
   | 'week'
   | 'den'
   | 'clock'
-  | 'note';
+  | 'note'
+  | 'media';
 export type SoundscapeId =
   | 'rain'
   | 'cafe'
