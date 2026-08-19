@@ -939,23 +939,149 @@ p { margin: 0; }
 .shop-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .price { font-weight: 800; font-size: 1rem; }
 
-/* ── History ─────────────────────────────────────────────────────────────── */
+/* ── Journal ─────────────────────────────────────────────────────────────── */
 
-.history > h1 { margin-bottom: 1rem; }
-.history .card + .card { margin-top: 1rem; }
-.table-wrap { overflow-x: auto; }
-.history-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-.history-table th,
-.history-table td { text-align: left; padding: 0.5rem 0.6rem; white-space: nowrap; }
-.history-table thead th {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ink-soft);
-  border-bottom: 2px solid var(--line);
+.jr-head { margin-bottom: 1rem; }
+.jr-sub { margin-top: 0.15rem; font-size: 0.9rem; }
+.history .card + .card,
+.history .jr-stats + .card { margin-top: 1rem; }
+
+/* Orchestrated entrance: sections rise in order (delays set inline). */
+.jr-rise { animation: jrRise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+@keyframes jrRise {
+  from { opacity: 0; transform: translateY(10px); }
 }
-.history-table tbody tr { border-bottom: 1px solid var(--line); }
-.history-table .num { text-align: right; }
+
+/* All-time stat strip */
+.jr-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+.jr-stat {
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  padding: 0.65rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.jr-stat-value { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
+.jr-stat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* This week: streak left, freeze right */
+.jr-week { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+.jr-week-streak { flex: 0 1 330px; min-width: 240px; }
+.jr-week .streak-dots { max-width: 330px; }
+.jr-freeze { flex: 1 1 260px; min-width: 240px; max-width: 420px; }
+
+/* Day by day: week groups of ribbon rows */
+.jr-weekgroup + .jr-weekgroup { margin-top: 1.15rem; }
+.jr-weekgroup-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+.jr-weekgroup-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.jr-weekgroup-sum { font-size: 0.75rem; color: var(--ink-soft); }
+.jr-days { list-style: none; margin: 0; padding: 0; }
+.jr-day {
+  display: grid;
+  /* The meta cluster gets a FIXED track so every ribbon shares the same
+     width — day lengths must be comparable down the column. */
+  grid-template-columns: 3.4rem minmax(90px, 1fr) 5.4rem 14.5rem 3.6rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.5rem;
+  border-top: 1px solid var(--line);
+  animation: jrRise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@media (max-width: 1000px) {
+  .jr-day { grid-template-columns: 3.4rem minmax(90px, 1fr) 5.4rem auto 3.6rem; }
+}
+.jr-day:hover { background: var(--surface-2); }
+.jr-day-date { display: flex; align-items: baseline; gap: 0.3rem; white-space: nowrap; }
+.jr-day-wd { font-size: 0.78rem; font-weight: 800; }
+.jr-day-num { font-size: 0.75rem; color: var(--ink-soft); }
+.jr-ribbon {
+  height: 10px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.jr-ribbon-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--work) 75%, var(--points)), var(--work));
+  border-radius: 999px;
+  transform-origin: left;
+  animation: jrFill 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.jr-day:hover .jr-ribbon-fill { filter: brightness(1.08); }
+.jr-day-flow { font-size: 0.82rem; font-weight: 700; text-align: right; white-space: nowrap; }
+.jr-day-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.jr-chip {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  white-space: nowrap;
+}
+.jr-chip-away {
+  color: var(--offline);
+  border-color: color-mix(in srgb, var(--offline) 40%, var(--line));
+}
+.jr-smooth { font-size: 0.7rem; font-weight: 800; color: var(--work); white-space: nowrap; }
+.jr-smooth.is-rough { color: var(--offline); }
+.jr-day-pts { font-size: 0.82rem; font-weight: 700; text-align: right; }
+.jr-more { margin-top: 0.9rem; }
+@keyframes jrFill {
+  from { transform: scaleX(0); }
+}
+
+@media (max-width: 700px) {
+  .jr-stats { grid-template-columns: repeat(2, 1fr); }
+  .jr-day {
+    grid-template-columns: 3rem 1fr auto;
+    grid-template-areas:
+      'date ribbon flow'
+      'meta meta pts';
+    row-gap: 0.3rem;
+  }
+  .jr-day-date { grid-area: date; }
+  .jr-ribbon { grid-area: ribbon; }
+  .jr-day-flow { grid-area: flow; }
+  .jr-day-meta { grid-area: meta; justify-content: flex-start; }
+  .jr-day-pts { grid-area: pts; }
+}
 
 /* ── Summary modal ───────────────────────────────────────────────────────── */
 
@@ -1194,28 +1320,81 @@ p { margin: 0; }
 }
 .volume-slider:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
-/* ── Charts ──────────────────────────────────────────────────────────────── */
+/* ── Charts (Journal · Rhythms) ──────────────────────────────────────────── */
 
-.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.5rem; }
-.chart-block { min-width: 0; }
-.chart-block:last-child { grid-column: 1 / -1; }
-.chart-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--ink-soft);
-  margin-bottom: 0.4rem;
+/* SVG scales its viewBox with the container — cap widths so text/marks keep
+   a sane size no matter how wide the card is. */
+.jr-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.75rem;
+  align-items: end;
 }
-.chart { width: 100%; height: auto; display: block; }
-.chart-val { fill: var(--ink); font-size: 9px; font-weight: 700; font-family: var(--mono); }
-.chart-axis { fill: var(--ink-soft); font-size: 9px; font-weight: 700; }
+.jr-chart-block { min-width: 0; max-width: 320px; }
+.jr-chart-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin-bottom: 0.5rem;
+}
+.jr-chart { width: 100%; height: auto; display: block; }
+.jr-chart-val { fill: var(--ink); font-size: 10px; font-weight: 700; font-family: var(--mono); }
+.jr-chart-axis { fill: var(--ink-soft); font-size: 9px; font-weight: 700; }
+
+/* One-shot chart entrances (frozen by the reduced-motion block). */
+.jr-bar {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: jrGrow 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes jrGrow {
+  from { transform: scaleY(0); }
+}
+.jr-bar-slot:hover .jr-bar { filter: brightness(1.12); }
+.jr-line-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: jrDraw 0.9s 0.15s ease-out forwards;
+}
+@keyframes jrDraw {
+  to { stroke-dashoffset: 0; }
+}
+.jr-line-area { opacity: 0; animation: jrArea 0.5s 0.75s ease-out forwards; }
+@keyframes jrArea {
+  to { opacity: 0.14; }
+}
+
+/* Breather meters (used vs limit, last day) */
+.jr-meters { display: flex; flex-direction: column; gap: 0.55rem; padding-bottom: 0.35rem; }
+.jr-meter {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+.jr-meter-name { font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); }
+.jr-meter-track {
+  height: 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.jr-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--break);
+  border-radius: 999px;
+  transform-origin: left;
+  animation: jrFill 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.jr-meter-fill.is-over { background: var(--offline); }
+.jr-meter-val { font-size: 0.75rem; color: var(--ink-soft); }
 
 /* ── Streak freeze ───────────────────────────────────────────────────────── */
 
-.freeze {
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--line);
-}
 .freeze-head {
   display: flex;
   justify-content: space-between;

@@ -220,7 +220,9 @@ describe('render smoke', () => {
       perks: { ...idleState().perks, streakFreeze: 1 },
     };
     const html = renderToString(<History state={s} now={NOW} />);
-    expect(html).toContain('Analytics');
+    expect(html).toContain('Rhythms');
     expect(html).toContain('Streak freeze');
+    expect(html).toContain('Day by day');
+    expect(html).toContain('days settled in'); // the all-time stat strip
   });
 });

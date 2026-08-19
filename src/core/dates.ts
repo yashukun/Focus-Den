@@ -38,6 +38,12 @@ function partsOf(dateKey: string): [number, number, number] {
   return [y || 1970, (m || 1) - 1, d || 1];
 }
 
+/** Local epoch ms (noon) for a date key — noon dodges DST edge cases. */
+export function epochOf(dateKey: string): number {
+  const [y, m, d] = partsOf(dateKey);
+  return new Date(y, m, d, 12, 0).getTime();
+}
+
 /** Add (or subtract) whole days to a date key. */
 export function addDays(dateKey: string, n: number): string {
   const [y, m, d] = partsOf(dateKey);
