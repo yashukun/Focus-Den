@@ -516,6 +516,25 @@ p { margin: 0; }
 .clock-ampm { font-size: 0.9rem; font-weight: 700; color: var(--ink-soft); margin-left: 0.3rem; }
 .clock-date { margin-top: 0.15rem; font-size: 0.9rem; }
 
+/* ── Update toast (desktop only) ─────────────────────────────────────────── */
+
+.update-banner {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  animation: riseIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.update-banner-text { font-size: 0.88rem; font-weight: 600; }
+
 /* ── Now-playing widget (desktop only) ───────────────────────────────────── */
 
 .media-app { font-size: 0.75rem; }

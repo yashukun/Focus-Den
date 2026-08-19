@@ -21,6 +21,7 @@ import { Settings } from './components/Settings';
 import { SummaryModal } from './components/SummaryModal';
 import { DeepWork } from './components/DeepWork';
 import { Onboarding } from './components/Onboarding';
+import { UpdateBanner } from './components/UpdateBanner';
 import { STATUS_META } from './components/statusMeta';
 import { applyTheme, resolvedAppearance } from './theme';
 
@@ -124,6 +125,7 @@ export default function App() {
       <>
         <Home state={state} onFocus={enterDen} />
         {summary && <SummaryModal summary={summary} onClose={() => store.dismissSummary()} />}
+        <UpdateBanner />
       </>
     );
   }
@@ -211,6 +213,7 @@ export default function App() {
       {!settings.onboarded && <Onboarding />}
       {summary && <SummaryModal summary={summary} onClose={() => store.dismissSummary()} />}
       {settings.deepWork && <DeepWork state={state} now={now} />}
+      <UpdateBanner />
     </div>
   );
 }
