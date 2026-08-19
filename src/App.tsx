@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { isActive } from './core';
-import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume } from './audio';
+import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume, warmup } from './audio';
 import { useNow, useStore } from './state/hooks';
 import { store } from './state/store';
 import { Home } from './components/Home';
@@ -60,6 +60,15 @@ export default function App() {
     if (settings.soundscapeOn) setSoundscape(settings.soundscape);
     else setSoundscape(null);
   }, [settings.soundscapeOn, settings.soundscape]);
+
+  // Wake the audio engine on every pointerdown (a valid gesture): the first
+  // real cue then has zero create/resume latency, and a context the OS
+  // suspended (sleep, Safari backgrounding) is back before it's needed.
+  useEffect(() => {
+    const onDown = () => warmup();
+    document.addEventListener('pointerdown', onDown, { passive: true });
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, []);
 
   // Cozy click feedback for every button — data-sound picks a richer cue.
   useEffect(() => {

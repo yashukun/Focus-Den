@@ -36,47 +36,58 @@ silences (used when a handler plays imperatively — `TaskLog`, the plan
 composers — or for quiet controls like calendar cells and edit-mode tools).
 Buttons with no attribute get `click`.
 
-## Ambient soundscapes
+## Ambient soundscapes (engine reworked 2026-08)
 
-`setSoundscape(id | null)` builds a WebAudio graph per scene inside
-`createAmbient`; `stop()` fades out over ~0.7 s then tears the graph down.
-Volume = `baseGain × settings.soundscapeVolume`, ramped smoothly.
+`setSoundscape(id | null)` builds a WebAudio graph per scene via
+`createAmbient(ctx, type, destination)`; `stop()` fades ~0.7 s then tears the
+graph down. Volume = `baseGain × settings.soundscapeVolume`, ramped smoothly.
+`createAmbient` deliberately takes any `BaseAudioContext` + destination so an
+**OfflineAudioContext harness can render scenes and measure RMS** — that's how
+the per-scene `baseGain`s were balanced (bright rain ≈ .008 RMS, darker scenes
+proportionally under, lofi gentlest ≈ .004). Re-run that harness after any
+gain change.
 
-Building blocks: a 2 s looped noise buffer (`makeNoise`, white or leaky-
-integrator brown), biquad filters, sine LFOs, `setInterval`-scheduled bursts.
+Engine rules (each one fixes a diagnosed weakness — keep them true):
 
-| Scene | Graph |
+1. **Beds loop a 10 s stereo noise buffer** with the tail crossfaded into the
+   head (no audible pattern, no seam tick), per-channel independent noise
+   (real stereo width), DC-removed and peak-normalized. Cached per sample
+   rate in `noiseFor`.
+2. **2–3 layers per scene** (body + air + detail) built with the `bed`/
+   `biquad` helpers, never one filtered noise.
+3. **Events ride the audio clock**: `on(delay, t => nextT)` layers are kept
+   scheduled 2 s ahead by a 400 ms lookahead tick — rhythm survives
+   background-tab timer throttling and main-thread jank.
+4. **One shared burst buffer** for all noise one-shots (`burstAt`); long
+   whooshes (waves) loop the 10 s bed instead. No per-event allocation.
+5. **Modulation drifts** — two LFOs at incommensurate rates (`drift`), never
+   a single metronomic sine. Events pan across the field (`panner`).
+6. **A gentle DynamicsCompressor** on the scene bus stops stacked events
+   clipping. Exponential envelopes always floor at 0.0001.
+
+| Scene | Layers |
 |---|---|
-| rain | white noise → bandpass 1300 Hz (Q .6) |
-| cafe | brown noise → lowpass 620 Hz |
-| lofi | white noise → lowpass 900 Hz + constant 220/277 Hz sine pad |
-| fireplace | brown noise → lowpass 420 Hz + random highpass crackle bursts every ~170 ms |
-| forest | white noise → bandpass 3.4 kHz, gain LFO .15 Hz + occasional two-note chirps |
-| waves | brown noise → lowpass 500 Hz, gain LFO .1 Hz (swell) |
-| wind | white noise → lowpass 700 Hz, filter-freq LFO .07 Hz ±400 Hz |
+| rain | bandpass body (drifting) + high patter shimmer + brown low wash + scheduled panned droplets |
+| cafe | brown murmur (breathing) + bandpass "voice" band whose center drifts like speech + rare cup clinks (sometimes double) |
+| lofi | warm lowpass bed + vinyl crackle + a 4-chord pad cycle (detuned sine pairs, slow attack/decay) |
+| fireplace | brown rumble (swelling) + faint air hiss + dense varied crackles with occasional double-cracks |
+| forest | gusty bandpass leaves + brown breeze + 2–4-note gliding bird motifs alternating sides |
+| waves | deep brown hum + each wave as an event: long swell, crest hiss, wash-out (6.5–11 s apart) |
+| wind | lowpass main with wandering cutoff + gain gusts + a thin high-Q whistle riding the same gusts |
 
-## Known weaknesses (diagnosed 2026-08; fix planned, not yet done)
+## Click-consistency fixes (2026-08)
 
-Quality:
-1. **2 s noise loop is audible** (repeating "swish", no seam crossfade) — the
-   single biggest cheapness. Fix: 8–10 s buffers with crossfaded seams.
-2. **One source + one filter per scene** — rain has no droplets/rumble, café
-   no murmur. Fix: 2–3 layers per scene.
-3. **`setInterval` scheduling** — crackles/chirps stall in background tabs
-   (timer throttling) and jitter. Fix: audio-clock lookahead scheduler.
-4. **Each crackle allocates a fresh 2 s buffer** (~350 KB, ×4/s) — GC churn.
-   Fix: one shared burst buffer.
-5. **Pure-sine LFOs** sound synthetic (waves/wind). Fix: noise-driven or
-   multi-rate modulation. Also: everything is **mono** (no stereo width), no
-   limiter (fireplace can clip), noise not peak-normalized (scene loudness
-   varies).
+- **Warmup**: `warmup()` (= ensure + resume the context) runs on every
+  `pointerdown` via App — the first real cue has no create/resume latency and
+  an OS-suspended context recovers before the next interaction.
+- **SFX loudness-matched**: gains lean against the equal-loudness curve —
+  bright triangles (coin 1319 Hz) get less gain, low/mid sines (switch/start)
+  get more, so cues land at a similar perceived level.
 
-Consistency:
-6. **First-click latency** — the context is created/resumed lazily, so the
-   first sound after load/sleep can lag 50–300 ms or drop. Fix: eagerly
-   create + resume on first `pointerdown`.
-7. **Policy drift** — default-on click sound + 37 scattered `data-sound="none"`
-   opt-outs means every new button makes a decision implicitly. Fix under
-   consideration: invert to opt-in.
-8. Equal gain ≠ equal loudness across cues (1319 Hz triangle ≫ 523 Hz sine
-   perceptually); cues need loudness-matching by ear.
+## Remaining known gaps
+
+- **Policy drift** — default-on click sound + scattered `data-sound="none"`
+  opt-outs means every new button decides implicitly. Fix under
+  consideration: invert to opt-in.
+- Loudness balance is RMS-based (offline harness), not eartested — worth a
+  human listening pass across scenes/volumes, especially lofi's pad level.
