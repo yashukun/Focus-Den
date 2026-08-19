@@ -9,7 +9,7 @@
  * Rule: current and upcoming days are editable; past days are locked (view only).
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   addDays,
   dateString,
@@ -33,9 +33,9 @@ import {
 } from '../core';
 import { store } from '../state/store';
 import { play } from '../audio';
-import { zoomFromRect } from '../fx';
 import { RichTextEditor, RichTextViewer, textToDescHtml } from './RichText';
 import { useArmedConfirm } from './useArmedConfirm';
+import { useEscape } from './useEscape';
 import { WeekGrid } from './WeekGrid';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
@@ -90,8 +90,6 @@ export function PlanView({ state, now }: PlanViewProps) {
   const [selectedDay, setSelectedDay] = useState(todayKey);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
-  const weekPaneRef = useRef<HTMLDivElement>(null);
-  const weekZoomFrom = useRef<DOMRect | null>(null);
 
   const tickets = ticketsFor(state.plan, selectedDay);
   const selected = selectedId ? tickets.find((t) => t.id === selectedId) ?? null : null;
@@ -113,23 +111,10 @@ export function PlanView({ state, now }: PlanViewProps) {
   }
 
   function pickMode(next: PlanMode) {
-    if (next === 'week' && mode === 'day') {
-      // The week view will zoom out of the selected day's calendar cell.
-      const cell = document.querySelector('.cal-selected') ?? document.querySelector('.cal-today');
-      weekZoomFrom.current = cell?.getBoundingClientRect() ?? null;
-    }
     rememberedMode = next;
     setMode(next);
     setSelectedId(null);
   }
-
-  // Runs right after the week pane mounts, before paint — FLIP from the cell.
-  useLayoutEffect(() => {
-    if (mode !== 'week') return;
-    const from = weekZoomFrom.current;
-    weekZoomFrom.current = null;
-    if (from) zoomFromRect(weekPaneRef.current?.querySelector('.week-card') ?? null, from);
-  }, [mode]);
 
   const detail = selected && (
     <DetailPanel
@@ -160,8 +145,10 @@ export function PlanView({ state, now }: PlanViewProps) {
         ))}
       </div>
 
+      {/* key={mode} remounts the pane so the rise-in replays on every switch,
+          matching the tab-switch entrance everywhere else in the app */}
       {mode === 'week' ? (
-        <div className="plan plan-week" ref={weekPaneRef}>
+        <div className="plan plan-week plan-enter" key="week">
           <WeekGrid
             state={state}
             now={now}
@@ -181,7 +168,7 @@ export function PlanView({ state, now }: PlanViewProps) {
           {detail}
         </div>
       ) : (
-        <div className="plan">
+        <div className={`plan plan-enter ${selected ? 'has-detail' : ''}`} key="day">
           <aside className="plan-rail">
             <MiniCalendar
               state={state}
@@ -204,7 +191,9 @@ export function PlanView({ state, now }: PlanViewProps) {
             onAdded={(title) => setPendingTitle(title)}
           />
 
-          {detail}
+          {/* Always-rendered third column: its width animates 0 ↔ open, so the
+              task list scooches over smoothly instead of jumping. */}
+          <div className="plan-detail-col">{detail}</div>
         </div>
       )}
     </div>
@@ -321,6 +310,7 @@ function DayPanel({
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTarget, setCopyTarget] = useState('');
   const [confirmClear, fireClear] = useArmedConfirm();
+  useEscape(() => setCopyOpen(false), copyOpen);
   const editable = isDateEditable(dateKey, todayKey);
   const tickets = sortDayTickets(ticketsFor(state.plan, dateKey));
   const rel = dateKey === todayKey ? 'Today' : dateKey === addDays(todayKey, 1) ? 'Tomorrow' : null;
@@ -689,6 +679,9 @@ function DetailPanel({
 }) {
   const [title, setTitle] = useState(ticket.title);
   const [confirmDelete, fireDelete] = useArmedConfirm();
+
+  // Esc backs out of the details — edits auto-save, so nothing is lost.
+  useEscape(onClose);
 
   const overdue = isTicketOverdue(ticket, now);
   const initialDesc = ticket.descHtml ?? (ticket.notes ? textToDescHtml(ticket.notes) : '');

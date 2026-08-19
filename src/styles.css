@@ -1509,12 +1509,29 @@ p { margin: 0; }
    (with nothing selected the day panel spans both remaining tracks). */
 .plan {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1.3fr) minmax(330px, 1fr);
+  /* The detail column animates 0 ↔ 400px, so opening a task slides the list
+     over instead of snapping (grid track lists interpolate when the track
+     functions match — keep both templates px/minmax/px shaped). */
+  grid-template-columns: 300px minmax(0, 1fr) 0px;
+  transition: grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1);
   gap: var(--space-4);
   align-items: start;
 }
-.plan > .day-panel:last-child { grid-column: 2 / -1; }
+/* Open: the calendar rail compresses too, so all three columns share the
+   980px app shell — rail, list and detail glide together. */
+.plan.has-detail { grid-template-columns: 240px minmax(0, 1fr) 360px; }
 .plan-rail { min-width: 0; }
+/* Rise-in on Day ↔ Week switches (keyed remount), same motion as tab changes. */
+.plan-enter { animation: riseIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* The always-present detail column: stretches to the row so the sticky panel
+   inside has room to stick; the panel keeps its full width while the column
+   grows, sliding in over the list edge rather than reflowing its text. */
+.plan-detail-col { min-width: 0; align-self: stretch; }
+.plan-detail-col .detail-panel {
+  width: 360px;
+  margin-left: auto;
+  animation: detailSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 .plan-cal { position: sticky; top: 4.5rem; padding: var(--space-4); }
 .cal-today-btn { width: 100%; margin-top: var(--space-2); }
 
@@ -2175,9 +2192,16 @@ p { margin: 0; }
 
 /* ── Responsive (phase-2 additions) ──────────────────────────────────────── */
 
-/* Narrow: calendar rail + list stay; the detail panel becomes a right sheet. */
+@keyframes detailSlideIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Narrow: calendar rail + list stay; the detail panel becomes a right sheet.
+   (Also override .plan.has-detail — the inline column stays collapsed here.) */
 @media (max-width: 1375px) {
-  .plan { grid-template-columns: 270px minmax(0, 1fr); }
+  .plan,
+  .plan.has-detail { grid-template-columns: 270px minmax(0, 1fr) 0px; }
   .detail-panel.is-open {
     position: fixed;
     top: 0;
@@ -2190,14 +2214,13 @@ p { margin: 0; }
     box-shadow: var(--shadow-md);
     animation: detailSlideIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-}
-@keyframes detailSlideIn {
-  from { transform: translateX(24px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  /* the sheet escapes the flow — undo the inline-column sizing */
+  .plan-detail-col .detail-panel { margin-left: 0; }
 }
 
 @media (max-width: 1000px) {
-  .plan { grid-template-columns: 1fr; }
+  .plan,
+  .plan.has-detail { grid-template-columns: 1fr; }
   .plan-cal { position: static; }
 }
 

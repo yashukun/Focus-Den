@@ -37,8 +37,15 @@ every screen. A document-level click listener plays button sounds — see
 - **PlanView.tsx** — the planner. Day mode: mini month calendar (left), the
   day's list with composer + status popover (middle), detail panel for the
   selected ticket (right: status/priority segs, deadline, scheduled slot,
-  length, rich description, delete). Week mode: `WeekGrid`. Past days are
-  locked read-only everywhere.
+  length, rich description, delete). Opening a ticket animates the whole
+  grid: `.plan.has-detail` transitions `grid-template-columns` (rail
+  compresses 300→240, detail column 0→360 — the app shell is capped at
+  980px, so all three columns must share) while the panel slides in; the
+  always-rendered `.plan-detail-col` wrapper is what makes the track
+  animatable. Below 1375px the panel is a fixed right sheet instead. Day ↔
+  Week switches remount with a `plan-enter` rise (same motion as tab
+  changes). Week mode: `WeekGrid`. Past days are locked read-only
+  everywhere. Esc closes the detail panel and the copy-day picker.
 - **WeekGrid.tsx** — seven 24 h columns; a ticket with `startMin` is a slot
   (height = `durationMin`). Click empty space to create, drag to move across
   time/days (15 min snap), drag the bottom edge to resize, overlapping slots
@@ -78,14 +85,18 @@ every screen. A document-level click listener plays button sounds — see
   in 4 s → fire). Used for wrap-up, reset, clear-day, delete. There is
   deliberately **no `window.confirm` anywhere** — browsers can suppress it
   and desktop webviews don't support it.
+- **useEscape.ts** — Esc-to-close for every layer: plan detail panel,
+  copy-day picker, Dashboard customize mode, deep-work overlay, summary
+  modal, onboarding, the week-grid composer. New panels/modes must wire it
+  up — nobody should need the ✕.
 
 ## fx (`src/fx/`) — one-shot animation
 
 anime.js v4, and the only place it's imported. Contract (`effects.ts` header):
 fire-and-forget, null-safe targets, no-op under `prefers-reduced-motion`
 (`motionOK()`), touch only transform/opacity. Effects: `popIn`, `bump`,
-`cheer`, `sparkleBurst` (throwaway particles), `countUp`, `zoomFromRect`
-(FLIP zoom, used day-cell → week view), `modalEnter`. Hooks: `useBumpOnChange`,
+`cheer`, `sparkleBurst` (throwaway particles), `countUp`, `modalEnter`.
+Hooks: `useBumpOnChange`,
 `useCelebrateOnIncrease` (both return callback refs), `useFxLayoutEffect`
 (SSR-safe layout effect). Ambient loops (cat tail, rain, string lights) are
 CSS keyframes in `styles.css`, not fx.

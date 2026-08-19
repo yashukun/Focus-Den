@@ -61,6 +61,7 @@ import { RoomScene } from '../room/RoomScene';
 import { MediaCard } from './MediaCard';
 import { STATUS_META } from './statusMeta';
 import { useArmedConfirm } from './useArmedConfirm';
+import { useEscape } from './useEscape';
 import { WeekStreak } from './WeekStreak';
 
 // Away is intentionally absent: it's reached only automatically when a
@@ -98,6 +99,7 @@ export interface DashboardProps {
 
 export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps) {
   const [editing, setEditing] = useState(false);
+  useEscape(() => setEditing(false), editing);
   const widgets = state.settings.dashWidgets;
   const active = isActive(state.shift.status);
 

@@ -4,10 +4,10 @@
  * the normal app. The ambient soundscape toggle is available here too.
  */
 
-import { useEffect } from 'react';
 import { formatHMS, isActive, type State } from '../core';
 import { store } from '../state/store';
 import { STATUS_META } from './statusMeta';
+import { useEscape } from './useEscape';
 
 export interface DeepWorkProps {
   state: State;
@@ -21,13 +21,7 @@ export function DeepWork({ state, now }: DeepWorkProps) {
   const stint = shift.statusStart != null ? Math.max(0, now - shift.statusStart) : 0;
   const currentTask = shift.tasks.length ? shift.tasks[shift.tasks.length - 1].text : null;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') store.setDeepWork(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useEscape(() => store.setDeepWork(false));
 
   return (
     <div className={`deepwork tone-${meta.tone}`} role="dialog" aria-label="Deep work mode">
