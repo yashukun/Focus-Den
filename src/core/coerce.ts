@@ -10,7 +10,12 @@
  * worst it can do is lose its own invalid fields to defaults.
  */
 
-import { DASH_WIDGET_IDS, SOUNDSCAPE_IDS } from './constants';
+import {
+  DASH_WIDGET_IDS,
+  SOUNDSCAPE_IDS,
+  TICKET_PRIORITY_IDS,
+  TICKET_STATUS_IDS,
+} from './constants';
 import { defaultState } from './shift';
 import type {
   Appearance,
@@ -100,8 +105,6 @@ function safeEntries(v: unknown): [string, unknown][] {
 const STATUSES: readonly Status[] = ['idle', 'working', 'break1', 'break2', 'lunch', 'offline', 'ended'];
 const THEMES: readonly ThemeId[] = ['cozy', 'midnight', 'sunrise'];
 const APPEARANCES: readonly Appearance[] = ['system', 'light', 'dark'];
-const TICKET_STATUSES: readonly TicketStatus[] = ['todo', 'in_progress', 'blocked', 'done'];
-const PRIORITIES: readonly TicketPriority[] = ['low', 'med', 'high', 'critical'];
 const BREAKS: readonly BreakKey[] = ['break1', 'break2', 'lunch'];
 
 function coerceOwned(v: unknown): Record<string, boolean> {
@@ -263,8 +266,8 @@ function coerceTicket(v: unknown): PlanTicket | null {
   const ticket: PlanTicket = {
     id,
     title,
-    status: enumOf<TicketStatus>(t.status, TICKET_STATUSES, 'todo'),
-    priority: enumOf<TicketPriority>(t.priority, PRIORITIES, 'med'),
+    status: enumOf<TicketStatus>(t.status, TICKET_STATUS_IDS, 'todo'),
+    priority: enumOf<TicketPriority>(t.priority, TICKET_PRIORITY_IDS, 'med'),
     createdAt: num(t.createdAt, 0, 0, MAX_EPOCH_MS),
   };
   const notes = str(t.notes, MAX_NOTES)?.trim();

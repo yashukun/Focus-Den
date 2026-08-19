@@ -13,39 +13,35 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   addDays,
   dateString,
+  fmtDeadline,
   formatDateLabel,
   formatSlotTime,
   isDateEditable,
+  isTicketOverdue,
   monthMatrix,
   monthOf,
   monthTitle,
+  sortDayTickets,
+  TICKET_PRIORITY_IDS,
+  TICKET_PRIORITY_LABELS,
+  TICKET_STATUS_IDS,
+  TICKET_STATUS_LABELS,
   ticketsFor,
   type PlanTicket,
   type State,
-  type TicketPriority,
   type TicketStatus,
 } from '../core';
 import { store } from '../state/store';
 import { play } from '../audio';
 import { zoomFromRect } from '../fx';
 import { RichTextEditor, RichTextViewer, textToDescHtml } from './RichText';
+import { useArmedConfirm } from './useArmedConfirm';
 import { WeekGrid } from './WeekGrid';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-const STATUSES: { id: TicketStatus; label: string }[] = [
-  { id: 'todo', label: 'To do' },
-  { id: 'in_progress', label: 'In progress' },
-  { id: 'blocked', label: 'Blocked' },
-  { id: 'done', label: 'Completed' },
-];
-
-const PRIORITIES: { id: TicketPriority; label: string }[] = [
-  { id: 'critical', label: 'Critical' },
-  { id: 'high', label: 'High' },
-  { id: 'med', label: 'Medium' },
-  { id: 'low', label: 'Low' },
-];
+const STATUSES = TICKET_STATUS_IDS.map((id) => ({ id, label: TICKET_STATUS_LABELS[id] }));
+const PRIORITIES = TICKET_PRIORITY_IDS.map((id) => ({ id, label: TICKET_PRIORITY_LABELS[id] }));
 
 /** Slot-length presets (minutes) — sizes a task, nothing is timed. */
 const LENGTHS: { min: number; label: string }[] = [
@@ -69,33 +65,11 @@ function lengthLabel(min: number): string {
   return `${m} min`;
 }
 
-function statusMeta(id: TicketStatus) {
-  return STATUSES.find((s) => s.id === id)!;
-}
-function priorityMeta(id: TicketPriority) {
-  return PRIORITIES.find((p) => p.id === id)!;
-}
-
-/** "today 17:30" / "tomorrow 09:00" / "Aug 18, 17:30" */
-function fmtDeadline(ms: number, todayKey: string): string {
-  const d = new Date(ms);
-  const p = (n: number) => String(n).padStart(2, '0');
-  const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
-  const key = dateString(ms);
-  if (key === todayKey) return `today ${hm}`;
-  if (key === addDays(todayKey, 1)) return `tomorrow ${hm}`;
-  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${hm}`;
-}
-
 /** Epoch ms → value for <input type="datetime-local"> (local time). */
 function toLocalInput(ms: number): string {
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function isOverdue(t: PlanTicket, now: number): boolean {
-  return t.deadlineMs != null && t.deadlineMs < now && t.status !== 'done';
 }
 
 export interface PlanViewProps {
@@ -346,21 +320,11 @@ function DayPanel({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTarget, setCopyTarget] = useState('');
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmClear, fireClear] = useArmedConfirm();
   const editable = isDateEditable(dateKey, todayKey);
-  // Scheduled slots first in time order; "anytime" tasks after, as entered.
-  const tickets = [...ticketsFor(state.plan, dateKey)].sort(
-    (a, b) => (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER),
-  );
+  const tickets = sortDayTickets(ticketsFor(state.plan, dateKey));
   const rel = dateKey === todayKey ? 'Today' : dateKey === addDays(todayKey, 1) ? 'Tomorrow' : null;
   const done = tickets.filter((t) => t.status === 'done').length;
-
-  // An armed "Clear day" stands down on its own if the second click never comes.
-  useEffect(() => {
-    if (!confirmClear) return;
-    const t = setTimeout(() => setConfirmClear(false), 4000);
-    return () => clearTimeout(t);
-  }, [confirmClear]);
 
   // The status popover closes on outside click / Escape.
   useEffect(() => {
@@ -393,16 +357,9 @@ function DayPanel({
         : 'Already up to date — nothing new to carry.',
     );
   }
-  // Inline two-step confirm — no native dialog (browsers can silently suppress
-  // window.confirm, which made the button look broken). Arms, then auto-disarms.
   function clearDay() {
-    if (!confirmClear) {
-      setConfirmClear(true);
-      setMsg(null);
-      return;
-    }
-    setConfirmClear(false);
-    store.clearPlanDay(dateKey);
+    setMsg(null);
+    fireClear(() => store.clearPlanDay(dateKey));
   }
   function toggleCopyPicker() {
     if (!copyOpen) {
@@ -614,9 +571,8 @@ function TicketRow({
   onCloseMenu: () => void;
   onSelect: () => void;
 }) {
-  const overdue = isOverdue(ticket, now);
+  const overdue = isTicketOverdue(ticket, now);
   const done = ticket.status === 'done';
-  const st = statusMeta(ticket.status);
 
   function toggleDone(e: React.MouseEvent) {
     e.stopPropagation();
@@ -671,7 +627,7 @@ function TicketRow({
                 onToggleMenu();
               }}
             >
-              {st.label}
+              {TICKET_STATUS_LABELS[ticket.status]}
             </button>
             {menuOpen && (
               <div className="status-menu" role="menu">
@@ -693,7 +649,7 @@ function TicketRow({
         </div>
 
         <span className="ticket-meta">
-          <span className={`prio-badge prio-${ticket.priority}`}>{priorityMeta(ticket.priority).label}</span>
+          <span className={`prio-badge prio-${ticket.priority}`}>{TICKET_PRIORITY_LABELS[ticket.priority]}</span>
           {ticket.startMin != null && (
             <span className="meta-chip mono" title="Scheduled slot">
               ◷ {formatSlotTime(ticket.startMin)}–{formatSlotTime(ticket.startMin + (ticket.durationMin ?? 60))}
@@ -732,17 +688,10 @@ function DetailPanel({
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(ticket.title);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDelete, fireDelete] = useArmedConfirm();
 
-  const overdue = isOverdue(ticket, now);
+  const overdue = isTicketOverdue(ticket, now);
   const initialDesc = ticket.descHtml ?? (ticket.notes ? textToDescHtml(ticket.notes) : '');
-
-  // An armed Delete stands down on its own if the second click never comes.
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const t = setTimeout(() => setConfirmDelete(false), 4000);
-    return () => clearTimeout(t);
-  }, [confirmDelete]);
 
   function saveTitle() {
     const trimmed = title.trim();
@@ -758,14 +707,11 @@ function DetailPanel({
     store.updatePlanTicket(dateKey, ticket.id, { descHtml: html || undefined, notes: undefined });
   }
 
-  // Inline two-step confirm — no native dialog (browsers can suppress it).
   function remove() {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    store.removePlanTicket(dateKey, ticket.id);
-    onClose();
+    fireDelete(() => {
+      store.removePlanTicket(dateKey, ticket.id);
+      onClose();
+    });
   }
 
   return (

@@ -20,6 +20,18 @@ export function ticketsFor(plan: PlanState, dateKey: string): PlanTicket[] {
   return plan.tickets[dateKey] ?? [];
 }
 
+/** Scheduled slots first in time order; "anytime" tickets after, as entered. */
+export function sortDayTickets(list: PlanTicket[]): PlanTicket[] {
+  return [...list].sort(
+    (a, b) => (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+/** Past its deadline and still not done. */
+export function isTicketOverdue(t: PlanTicket, now: number): boolean {
+  return t.deadlineMs != null && t.deadlineMs < now && t.status !== 'done';
+}
+
 /** Current or future days are editable; past days are locked. */
 export function isDateEditable(dateKey: string, todayKey: string): boolean {
   return dateKey >= todayKey; // ISO date keys sort chronologically

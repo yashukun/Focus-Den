@@ -3,7 +3,13 @@
  * Real-time only — there is deliberately no fast-forward / speed control.
  */
 
-import type { BreakKey, DashWidgetId, SoundscapeId } from './types';
+import type {
+  BreakKey,
+  DashWidgetId,
+  SoundscapeId,
+  TicketPriority,
+  TicketStatus,
+} from './types';
 
 /** Ambient soundscapes, in display order, with their labels. */
 export const SOUNDSCAPE_IDS: SoundscapeId[] = [
@@ -49,6 +55,26 @@ export const DEFAULT_DASH_WIDGETS: DashWidgetId[] = [
   'points',
   'den',
 ];
+
+/** Ticket statuses in display order, with the labels every screen shares. */
+export const TICKET_STATUS_IDS: TicketStatus[] = ['todo', 'in_progress', 'blocked', 'done'];
+
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  todo: 'To do',
+  in_progress: 'In progress',
+  blocked: 'Blocked',
+  done: 'Completed',
+};
+
+/** Ticket priorities in display order (most urgent first), with shared labels. */
+export const TICKET_PRIORITY_IDS: TicketPriority[] = ['critical', 'high', 'med', 'low'];
+
+export const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {
+  critical: 'Critical',
+  high: 'High',
+  med: 'Medium',
+  low: 'Low',
+};
 
 export const MINUTE_MS = 60 * 1000;
 export const HOUR_MS = 60 * MINUTE_MS;

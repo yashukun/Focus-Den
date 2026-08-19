@@ -28,6 +28,7 @@ import {
   DEFAULT_DASH_WIDGETS,
   earnedPreview,
   effectiveGrace,
+  fmtDeadline,
   formatClock,
   formatDateLabel,
   formatHM,
@@ -37,10 +38,14 @@ import {
   isActive,
   isBreakConsumed,
   isBreakKey,
+  isTicketOverdue,
   liveAcc,
   liveBreakUsed,
+  pad2,
   shiftProgress,
+  sortDayTickets,
   SOUNDSCAPE_LABELS,
+  TICKET_STATUS_LABELS,
   ticketsFor,
   weekKey,
   type BreakKey,
@@ -48,12 +53,12 @@ import {
   type PlanTicket,
   type State,
   type Status,
-  type TicketStatus,
 } from '../core';
 import { store } from '../state/store';
 import { play } from '../audio';
 import { RoomScene } from '../room/RoomScene';
 import { STATUS_META } from './statusMeta';
+import { useArmedConfirm } from './useArmedConfirm';
 import { WeekStreak } from './WeekStreak';
 
 // Away is intentionally absent: it's reached only automatically when a
@@ -361,11 +366,7 @@ function StatusCard({ state, now }: { state: State; now: number }) {
     }
   }, [warn, currentBreak]);
 
-  function onEnd() {
-    if (window.confirm('Wrap up the day? This locks in today’s points.')) {
-      store.endShift(Date.now());
-    }
-  }
+  const [endArmed, fireEnd] = useArmedConfirm();
 
   return (
     <section className={`card status-card tone-${meta.tone}`}>
@@ -455,8 +456,11 @@ function StatusCard({ state, now }: { state: State; now: number }) {
         })}
       </div>
 
-      <button className="btn btn-danger btn-block" onClick={onEnd}>
-        Wrap up the day
+      <button
+        className={`btn btn-danger btn-block ${endArmed ? 'is-armed' : ''}`}
+        onClick={() => fireEnd(() => store.endShift(Date.now()))}
+      >
+        {endArmed ? 'Really wrap up? This locks in today’s points.' : 'Wrap up the day'}
       </button>
 
       <div className="focus-tools">
@@ -625,7 +629,6 @@ function DenCard({ state, onGoToRoom }: { state: State; onGoToRoom: () => void }
 
 function ClockCard({ now }: { now: number }) {
   const d = new Date(now);
-  const pad2 = (n: number) => String(n).padStart(2, '0');
   let h = d.getHours();
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
@@ -678,20 +681,6 @@ function NoteCard({ note }: { note: string }) {
 
 // ── Today's plan / end-of-day report ─────────────────────────────────────────
 
-const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
-  todo: 'To do',
-  in_progress: 'In progress',
-  blocked: 'Blocked',
-  done: 'Completed',
-};
-
-/** Scheduled slots first in time order; "anytime" tasks after, as entered. */
-function sortTickets(list: PlanTicket[]): PlanTicket[] {
-  return [...list].sort(
-    (a, b) => (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER),
-  );
-}
-
 function TodayPlanCard({
   state,
   now,
@@ -707,7 +696,7 @@ function TodayPlanCard({
     return <TodayReport state={state} todayKey={todayKey} onOpenPlanner={onOpenPlanner} />;
   }
 
-  const tickets = sortTickets(ticketsFor(state.plan, todayKey));
+  const tickets = sortDayTickets(ticketsFor(state.plan, todayKey));
   const done = tickets.filter((t) => t.status === 'done').length;
 
   return (
@@ -797,7 +786,7 @@ function TodayTicketRow({
   now: number;
 }) {
   const done = ticket.status === 'done';
-  const overdue = ticket.deadlineMs != null && ticket.deadlineMs < now && !done;
+  const overdue = isTicketOverdue(ticket, now);
   return (
     <li className={`tplan-item prio-${ticket.priority} ${done ? 'is-done' : ''}`}>
       <button
@@ -822,9 +811,7 @@ function TodayTicketRow({
         )}
         {ticket.deadlineMs != null && (
           <span className={`meta-chip mono ${overdue ? 'is-over' : ''}`} title="Deadline">
-            ⚑ {dateString(ticket.deadlineMs) === todayKey
-              ? formatClock(ticket.deadlineMs)
-              : formatDateLabel(dateString(ticket.deadlineMs))}
+            ⚑ {fmtDeadline(ticket.deadlineMs, todayKey)}
           </span>
         )}
       </span>
@@ -847,10 +834,10 @@ function TodayReport({
 }) {
   const [msg, setMsg] = useState<string | null>(null);
   const tomorrowKey = addDays(todayKey, 1);
-  const tickets = sortTickets(ticketsFor(state.plan, todayKey));
+  const tickets = sortDayTickets(ticketsFor(state.plan, todayKey));
   const done = tickets.filter((t) => t.status === 'done');
   const missed = tickets.filter((t) => t.status !== 'done');
-  const tomorrow = sortTickets(ticketsFor(state.plan, tomorrowKey));
+  const tomorrow = sortDayTickets(ticketsFor(state.plan, tomorrowKey));
 
   function carry() {
     const n = store.moveUnfinishedToNextDay(todayKey);

@@ -6,6 +6,7 @@
 import { useRef, useState } from 'react';
 import { SOUNDSCAPE_IDS, SOUNDSCAPE_LABELS, type Appearance, type State, type ThemeId } from '../core';
 import { store } from '../state/store';
+import { useArmedConfirm } from './useArmedConfirm';
 
 export interface SettingsProps {
   state: State;
@@ -27,6 +28,7 @@ export function Settings({ state }: SettingsProps) {
   const { settings, perks } = state;
   const fileRef = useRef<HTMLInputElement>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [resetArmed, fireReset] = useArmedConfirm();
 
   function downloadBackup() {
     const blob = new Blob([store.exportJSON()], { type: 'application/json' });
@@ -53,14 +55,10 @@ export function Settings({ state }: SettingsProps) {
   }
 
   function resetAll() {
-    if (
-      window.confirm(
-        'Reset everything? This wipes points, items, today, the week streak, and the whole journal. This cannot be undone.',
-      )
-    ) {
+    fireReset(() => {
       store.resetAll();
       setMsg('Everything reset — fresh den.');
-    }
+    });
   }
 
   return (
@@ -174,8 +172,16 @@ export function Settings({ state }: SettingsProps) {
 
       <section className="card manage-danger">
         <div className="card-head"><h2>Danger zone</h2></div>
-        <p className="muted">Wipe all saved data and start completely fresh.</p>
-        <button className="btn btn-danger btn-block" onClick={resetAll}>Reset everything</button>
+        <p className="muted">
+          Wipe all saved data — points, items, today, the streak, the whole journal — and start
+          completely fresh. This cannot be undone.
+        </p>
+        <button
+          className={`btn btn-danger btn-block ${resetArmed ? 'is-armed' : ''}`}
+          onClick={resetAll}
+        >
+          {resetArmed ? 'Really reset everything? This cannot be undone.' : 'Reset everything'}
+        </button>
       </section>
 
       <p className="app-version settings-version">Focus Den {__APP_VERSION__}</p>

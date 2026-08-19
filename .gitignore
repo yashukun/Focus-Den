@@ -34,3 +34,6 @@ pull-db.py
 *.ntvs*
 *.njsproj
 *.sw?
+
+# Claude Code: local settings stay out; .claude/agents/ is shareable project config
+.claude/settings.local.json

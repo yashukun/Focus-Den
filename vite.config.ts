@@ -21,6 +21,9 @@ const sha = shortSha();
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Relative asset URLs: the same dist/ works from the Fastify static server
+  // AND from a desktop webview's custom protocol (Tauri/Electron packaging).
+  base: './',
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(sha ? `v${pkg.version} (${sha})` : `v${pkg.version}`),

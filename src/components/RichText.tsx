@@ -1,6 +1,6 @@
 /**
- * Dependency-free rich text for intention descriptions: a contentEditable
- * editor plus a sanitized viewer. HTML passes through an allowlist scrub on
+ * Rich text for intention descriptions: a contentEditable editor plus a
+ * sanitized viewer. HTML passes through DOMPurify with a strict allowlist on
  * every save AND every render — coerce (shared with the server) can only bound
  * the string's size, so the DOM-aware last line of defense lives here and a
  * hostile imported document can never smuggle markup into the page.
@@ -10,74 +10,47 @@
  * inserted as plain text — foreign markup never enters the document.
  */
 
+import DOMPurify from 'dompurify';
 import { useEffect, useMemo, useRef } from 'react';
 
 // ── Sanitizer ────────────────────────────────────────────────────────────────
 
-/** Tags whose entire subtree is dangerous — removed, not unwrapped. */
-const DROP_TAGS = new Set([
-  'script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'link',
-  'meta', 'base', 'form', 'input', 'button', 'textarea', 'select', 'option',
-  'video', 'audio', 'source', 'track', 'template', 'head', 'title', 'noscript',
-]);
-
-/** Allowed tags and, per tag, the attributes that survive. Anything else unwraps. */
-const ALLOWED_ATTRS: Record<string, readonly string[]> = {
-  p: [], div: [], br: [], b: [], strong: [], i: [], em: [], u: [], s: [],
-  ul: [], ol: [], li: [], blockquote: [], code: [], pre: [], span: [],
-  img: ['src', 'alt'],
-  a: ['href'],
-};
+const ALLOWED_TAGS = [
+  'p', 'div', 'br', 'b', 'strong', 'i', 'em', 'u', 's',
+  'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'span', 'img', 'a',
+];
+const ALLOWED_ATTR = ['src', 'alt', 'href'];
 
 const IMG_SRC_RE = /^data:image\/(png|jpeg|webp|gif);base64,/i;
 const LINK_RE = /^https?:\/\//i;
 
-function scrub(parent: Node): void {
-  for (const child of Array.from(parent.childNodes)) {
-    if (child.nodeType === Node.TEXT_NODE) continue;
-    if (child.nodeType !== Node.ELEMENT_NODE) {
-      child.remove(); // comments, CDATA, …
-      continue;
-    }
-    const el = child as Element;
-    const tag = el.tagName.toLowerCase();
-    if (DROP_TAGS.has(tag)) {
-      el.remove();
-      continue;
-    }
-    const allowed = ALLOWED_ATTRS[tag];
-    if (!allowed) {
-      scrub(el); // unknown wrapper: keep its (scrubbed) children, drop the tag
-      while (el.firstChild) parent.insertBefore(el.firstChild, el);
-      el.remove();
-      continue;
-    }
-    for (const attr of Array.from(el.attributes)) {
-      if (!allowed.includes(attr.name)) el.removeAttribute(attr.name);
-    }
-    if (tag === 'img' && !IMG_SRC_RE.test(el.getAttribute('src') ?? '')) {
-      el.remove();
-      continue;
+// House rules DOMPurify can't express declaratively: images must be bounded
+// data: URLs (nothing remote), links must be https and open in a new tab.
+let hooked = false;
+function ensureHook(): void {
+  if (hooked) return;
+  hooked = true;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    const tag = node.tagName?.toLowerCase();
+    if (tag === 'img' && !IMG_SRC_RE.test(node.getAttribute('src') ?? '')) {
+      node.remove();
     }
     if (tag === 'a') {
-      if (LINK_RE.test(el.getAttribute('href') ?? '')) {
-        el.setAttribute('rel', 'noreferrer');
-        el.setAttribute('target', '_blank');
+      if (LINK_RE.test(node.getAttribute('href') ?? '')) {
+        node.setAttribute('rel', 'noreferrer');
+        node.setAttribute('target', '_blank');
       } else {
-        el.removeAttribute('href');
+        node.removeAttribute('href');
       }
     }
-    scrub(el);
-  }
+  });
 }
 
 /** Allowlist-sanitize description HTML. Outside a browser, degrade to text. */
 export function sanitizeDescHtml(html: string): string {
   if (typeof document === 'undefined') return html.replace(/<[^>]*>/g, ' ');
-  const tpl = document.createElement('template');
-  tpl.innerHTML = html;
-  scrub(tpl.content);
-  return tpl.innerHTML;
+  ensureHook();
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false });
 }
 
 /** True when the HTML holds no visible content (no text, no image). */

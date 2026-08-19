@@ -1,5 +1,9 @@
 # Developing Focus Den
 
+Deep dives per subsystem live in this directory — see the
+[docs index](README.md) (core, state, ui, sound, styles, room, server,
+desktop packaging). This file is the short contributor guide.
+
 ## Quick start
 
 ```bash
@@ -75,8 +79,14 @@ server/src/    (static host for the built app; the routes below are the
    and covered there.
 6. **No new runtime dependencies without a reason** — the app is deliberately
    zero-asset (SVG + WebAudio) and the server is 5 packages. Every dependency
-   is attack surface and upgrade debt. The one frontend extra is animejs,
-   used only by `src/fx` for one-shot effects.
+   is attack surface and upgrade debt. The frontend extras are exactly two:
+   animejs (only `src/fx`, one-shot effects) and dompurify (only
+   `components/RichText.tsx`, description sanitizing).
+7. **No `window.confirm`/`alert`** — browsers can suppress them and desktop
+   webviews don't support them. Destructive actions use `useArmedConfirm`
+   (two-step inline confirm). Keep asset URLs relative and web APIs
+   feature-checked — the same build must run in a desktop webview
+   (see [desktop.md](desktop.md)).
 
 ## Adding things (worked examples)
 

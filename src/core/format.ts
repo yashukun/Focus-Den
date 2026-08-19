@@ -2,7 +2,10 @@
  * Pure formatting helpers for durations and wall-clock times.
  */
 
-function pad2(n: number): string {
+import { addDays, dateString } from './dates';
+
+/** Zero-pad to two digits ("7" → "07"). */
+export function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
@@ -51,6 +54,16 @@ export function formatClock(epoch: number): string {
 export function formatSlotTime(min: number): string {
   const clamped = Math.min(24 * 60 - 1, Math.max(0, Math.round(min)));
   return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`;
+}
+
+/** Deadline label relative to a day: "today 17:30" / "tomorrow 09:00" / "Aug 18, 17:30". */
+export function fmtDeadline(ms: number, todayKey: string): string {
+  const d = new Date(ms);
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const key = dateString(ms);
+  if (key === todayKey) return `today ${hm}`;
+  if (key === addDays(todayKey, 1)) return `tomorrow ${hm}`;
+  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${hm}`;
 }
 
 /** YYYY-MM-DD -> a friendly "Mon, Jun 29" style label. */
