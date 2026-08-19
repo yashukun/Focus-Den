@@ -16,6 +16,7 @@ import {
   applyStreakFreeze,
   canClockIn,
   clockIn as coreClockIn,
+  DASH_WIDGET_IDS,
   dateString,
   defaultState,
   endTimeOf,
@@ -33,6 +34,7 @@ import {
   weekDates,
   type Appearance,
   type CosmeticSlot,
+  type DashWidgetId,
   type Perks,
   type PlanTicket,
   type Settings,
@@ -350,6 +352,30 @@ export const store = {
   },
 
   /**
+   * End-of-day carry: MOVE every not-done intention to the following day
+   * (unlike the copy actions, the source day loses them). Ones the next day
+   * already has (by title) are skipped so duplicates never pile up. Returns
+   * how many moved.
+   */
+  moveUnfinishedToNextDay(dateKey: string): number {
+    const today = dateString(Date.now());
+    const nextDay = addDays(dateKey, 1);
+    const unfinished = ticketsFor(state.plan, dateKey).filter((t) => t.status !== 'done');
+    const present = new Set(ticketsFor(state.plan, nextDay).map(titleKey));
+    let plan = state.plan;
+    let moved = 0;
+    for (const t of unfinished) {
+      if (present.has(titleKey(t))) continue;
+      present.add(titleKey(t));
+      plan = planMoveNext(plan, dateKey, t.id, today);
+      moved += 1;
+    }
+    if (plan === state.plan) return 0;
+    setState({ ...state, plan });
+    return moved;
+  },
+
+  /**
    * Reschedule an intention onto another day (week-grid drag), optionally
    * landing it on a new slot time in the same commit.
    */
@@ -461,6 +487,27 @@ export const store = {
   setDeepWork(on: boolean): void {
     if (on && !state.perks.deepWork) return;
     setSettings({ deepWork: on });
+  },
+
+  /**
+   * Replace the Today-page layout. Defensive: unknown ids and duplicates are
+   * dropped, and 'focus' (the timer hero) is forced back in if missing.
+   */
+  setDashWidgets(ids: DashWidgetId[]): void {
+    const seen = new Set<DashWidgetId>();
+    const clean = ids.filter((id) => {
+      if (!DASH_WIDGET_IDS.includes(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (!seen.has('focus')) clean.unshift('focus');
+    setSettings({ dashWidgets: clean });
+  },
+
+  setDashNote(text: string): void {
+    const note = text.slice(0, 2000);
+    if (note === state.settings.dashNote) return;
+    setSettings({ dashNote: note });
   },
 
   completeOnboarding(): void {

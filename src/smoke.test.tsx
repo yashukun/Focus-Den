@@ -87,15 +87,78 @@ describe('render smoke', () => {
   });
 
   it('renders the Dashboard in idle and active states', () => {
-    const idle = renderToString(<Dashboard state={idleState()} now={NOW} onGoToRoom={() => {}} />);
+    const idle = renderToString(
+      <Dashboard state={idleState()} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
+    );
     expect(idle).toContain('Your den is ready');
     expect(idle).toContain('Settle in');
+    expect(idle).toContain('Today’s plan'); // the plan widget shows before settling in
+    expect(idle).not.toContain('Breathers'); // mid-day cards sleep while idle
 
     const active: State = { ...idleState(), shift: activeShift() };
-    const html = renderToString(<Dashboard state={active} now={NOW} onGoToRoom={() => {}} />);
+    const html = renderToString(
+      <Dashboard state={active} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
+    );
     expect(html).toContain('In flow');
     expect(html).toContain('Breathers');
     expect(html).toContain('Wins');
+    expect(html).toContain('Today’s plan');
+  });
+
+  it('renders today’s planned tasks, and the report + tomorrow once the day ends', () => {
+    const planned: State = {
+      ...idleState(),
+      plan: {
+        tickets: {
+          '2026-01-05': [
+            { id: 'a', title: 'Ship the fix', status: 'done', priority: 'high', createdAt: 1 },
+            { id: 'b', title: 'Write the doc', status: 'todo', priority: 'med', createdAt: 2 },
+          ],
+          '2026-01-06': [
+            { id: 'c', title: 'Plan sprint', status: 'todo', priority: 'med', createdAt: 3, startMin: 540 },
+          ],
+        },
+      },
+    };
+
+    const midday = renderToString(
+      <Dashboard state={planned} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
+    );
+    expect(midday).toContain('Ship the fix');
+    expect(midday).toContain('1 of 2 completed');
+
+    const ended: State = {
+      ...planned,
+      shift: { ...activeShift(), status: 'ended', statusStart: null },
+    };
+    const done = renderToString(
+      <Dashboard state={ended} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
+    );
+    expect(done).toContain('Today’s report');
+    expect(done).toContain('Not completed');
+    expect(done).toContain('Write the doc');
+    expect(done).toContain('Carry unfinished to tomorrow');
+    expect(done).toContain('Tomorrow');
+    expect(done).toContain('Plan sprint');
+  });
+
+  it('renders the customize mode widgets (clock + note) when enabled', () => {
+    const s = idleState();
+    const custom: State = {
+      ...s,
+      settings: {
+        ...s.settings,
+        dashWidgets: ['focus', 'clock', 'note'],
+        dashNote: 'remember the milk',
+      },
+    };
+    const html = renderToString(
+      <Dashboard state={custom} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
+    );
+    expect(html).toContain('clock-time');
+    expect(html).toContain('remember the milk');
+    expect(html).not.toContain('Today’s plan'); // hidden widgets stay hidden
+    expect(html).toContain('Customize');
   });
 
   it('renders Shop, RoomView and the Journal', () => {

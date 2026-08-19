@@ -186,6 +186,29 @@ describe('coerceState (deep validation)', () => {
     expect(f.startMin).toBeUndefined();
   });
 
+  it('whitelists Today-page widgets, dedupes, and always keeps the focus hero', () => {
+    const s = coerceState({
+      v: 2,
+      settings: { dashWidgets: ['clock', 'banana', 'clock', 42, 'note', { evil: 1 }] },
+    })!;
+    expect(s.settings.dashWidgets).toEqual(['focus', 'clock', 'note']);
+
+    // Garbage shapes fall back to the default layout.
+    expect(coerceState({ v: 2, settings: { dashWidgets: 'all of them' } })!.settings.dashWidgets)
+      .toEqual(defaultState().settings.dashWidgets);
+    expect(coerceState({ v: 2 })!.settings.dashWidgets).toEqual(defaultState().settings.dashWidgets);
+
+    // An explicitly empty layout still gets the focus hero back.
+    expect(coerceState({ v: 2, settings: { dashWidgets: [] } })!.settings.dashWidgets).toEqual(['focus']);
+  });
+
+  it('caps the Today-page note and drops non-string notes', () => {
+    const long = coerceState({ v: 2, settings: { dashNote: 'x'.repeat(9000) } })!;
+    expect(long.settings.dashNote.length).toBe(2000);
+    expect(coerceState({ v: 2, settings: { dashNote: 42 } })!.settings.dashNote).toBe('');
+    expect(coerceState({ v: 2, settings: { dashNote: 'keep me' } })!.settings.dashNote).toBe('keep me');
+  });
+
   it('never copies __proto__/constructor keys from untrusted records', () => {
     const s = coerceState({
       v: 2,

@@ -73,6 +73,51 @@ describe('store: status changes', () => {
   });
 });
 
+describe('store: end-of-day carry (move unfinished to tomorrow)', () => {
+  it('moves only not-done intentions, leaving completed ones as the record', () => {
+    const today = dateString(Date.now());
+    const tomorrow = addDays(today, 1);
+    store.addPlanTicket(today, { title: 'Done thing' });
+    store.addPlanTicket(today, { title: 'Missed thing' });
+    const doneId = ticketsFor(store.getState().plan, today)[0].id;
+    store.setPlanStatus(today, doneId, 'done');
+
+    const moved = store.moveUnfinishedToNextDay(today);
+
+    expect(moved).toBe(1);
+    expect(ticketsFor(store.getState().plan, today).map((t) => t.title)).toEqual(['Done thing']);
+    expect(ticketsFor(store.getState().plan, tomorrow).map((t) => t.title)).toEqual(['Missed thing']);
+  });
+
+  it('skips intentions tomorrow already has (by title) and reports 0 when nothing moves', () => {
+    const today = dateString(Date.now());
+    const tomorrow = addDays(today, 1);
+    store.addPlanTicket(today, { title: 'Repeat' });
+    store.addPlanTicket(tomorrow, { title: 'repeat' }); // same title, case-insensitive
+
+    expect(store.moveUnfinishedToNextDay(today)).toBe(0);
+    expect(ticketsFor(store.getState().plan, today)).toHaveLength(1); // stays put
+    expect(ticketsFor(store.getState().plan, tomorrow)).toHaveLength(1); // no duplicate
+  });
+});
+
+describe('store: Today-page layout', () => {
+  it('replaces the layout, dropping unknown ids and duplicates, keeping focus', () => {
+    store.setDashWidgets(['clock', 'note', 'clock']);
+    expect(store.getState().settings.dashWidgets).toEqual(['focus', 'clock', 'note']);
+
+    store.setDashWidgets(['den', 'focus', 'week']);
+    expect(store.getState().settings.dashWidgets).toEqual(['den', 'focus', 'week']);
+  });
+
+  it('stores and caps the sticky note', () => {
+    store.setDashNote('milk, eggs');
+    expect(store.getState().settings.dashNote).toBe('milk, eggs');
+    store.setDashNote('y'.repeat(5000));
+    expect(store.getState().settings.dashNote.length).toBe(2000);
+  });
+});
+
 describe('store: plan duplication', () => {
   it('copies a day to the next day', () => {
     const today = dateString(Date.now());

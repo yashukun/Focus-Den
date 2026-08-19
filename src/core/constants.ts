@@ -3,7 +3,7 @@
  * Real-time only — there is deliberately no fast-forward / speed control.
  */
 
-import type { BreakKey, SoundscapeId } from './types';
+import type { BreakKey, DashWidgetId, SoundscapeId } from './types';
 
 /** Ambient soundscapes, in display order, with their labels. */
 export const SOUNDSCAPE_IDS: SoundscapeId[] = [
@@ -25,6 +25,30 @@ export const SOUNDSCAPE_LABELS: Record<SoundscapeId, string> = {
   waves: 'Waves',
   wind: 'Wind',
 };
+
+/** Every Today-page widget that exists (whitelist for coercion + the edit tray). */
+export const DASH_WIDGET_IDS: DashWidgetId[] = [
+  'focus',
+  'plan',
+  'breathers',
+  'wins',
+  'points',
+  'week',
+  'den',
+  'clock',
+  'note',
+];
+
+/** Fresh-den layout: mirrors the classic dashboard, with the plan card on. */
+export const DEFAULT_DASH_WIDGETS: DashWidgetId[] = [
+  'focus',
+  'plan',
+  'breathers',
+  'wins',
+  'week',
+  'points',
+  'den',
+];
 
 export const MINUTE_MS = 60 * 1000;
 export const HOUR_MS = 60 * MINUTE_MS;

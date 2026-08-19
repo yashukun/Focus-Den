@@ -10,11 +10,12 @@
  * worst it can do is lose its own invalid fields to defaults.
  */
 
-import { SOUNDSCAPE_IDS } from './constants';
+import { DASH_WIDGET_IDS, SOUNDSCAPE_IDS } from './constants';
 import { defaultState } from './shift';
 import type {
   Appearance,
   BreakKey,
+  DashWidgetId,
   Equipped,
   HistoryEntry,
   Perks,
@@ -49,6 +50,7 @@ const MAX_HISTORY = 5000;
 const MAX_TICKETS_PER_DAY = 100;
 const MAX_PLAN_DAYS = 800;
 const MAX_OWNED = 300;
+const MAX_DASH_NOTE = 2000;
 const MAX_FREEZES = 999;
 const MAX_GRACE_BONUS_MS = 10 * 60 * 1000;
 
@@ -136,6 +138,26 @@ function coercePerks(v: unknown, base: Perks): Perks {
   };
 }
 
+/**
+ * Whitelist + dedupe the Today-page layout. Unknown ids and repeats are
+ * dropped; 'focus' (the timer hero) is re-inserted up front if missing so the
+ * page always has a way to clock in. Anything unrecognizable → default layout.
+ */
+function coerceDashWidgets(v: unknown, base: DashWidgetId[]): DashWidgetId[] {
+  if (!Array.isArray(v)) return [...base];
+  const seen = new Set<DashWidgetId>();
+  const out: DashWidgetId[] = [];
+  for (const item of v.slice(0, 50)) {
+    if (typeof item !== 'string') continue;
+    const id = item as DashWidgetId;
+    if (!DASH_WIDGET_IDS.includes(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  if (!seen.has('focus')) out.unshift('focus');
+  return out;
+}
+
 function coerceSettings(v: unknown, base: Settings): Settings {
   const obj = (v ?? {}) as Partial<Record<keyof Settings, unknown>>;
   return {
@@ -146,6 +168,8 @@ function coerceSettings(v: unknown, base: Settings): Settings {
     soundscapeVolume: num(obj.soundscapeVolume, base.soundscapeVolume, 0, 1),
     deepWork: bool(obj.deepWork, base.deepWork),
     onboarded: bool(obj.onboarded, base.onboarded),
+    dashWidgets: coerceDashWidgets(obj.dashWidgets, base.dashWidgets),
+    dashNote: str(obj.dashNote, MAX_DASH_NOTE) ?? base.dashNote,
   };
 }
 

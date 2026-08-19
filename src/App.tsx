@@ -186,7 +186,12 @@ export default function App() {
       {/* key={tab} re-runs the entrance animation on every switch */}
       <main className="screen screen-enter" key={tab}>
         {tab === 'dashboard' && (
-          <Dashboard state={state} now={now} onGoToRoom={() => setTab('room')} />
+          <Dashboard
+            state={state}
+            now={now}
+            onGoToRoom={() => setTab('room')}
+            onGoToPlan={() => setTab('plan')}
+          />
         )}
         {tab === 'plan' && <PlanView state={state} now={now} />}
         {tab === 'room' && <RoomView state={state} />}

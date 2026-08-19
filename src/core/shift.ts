@@ -12,7 +12,7 @@
  * (on a switch, on auto-offline, or at finalize).
  */
 
-import { BREAK_KEYS, BREAK_LIMITS, GRACE_MS, SHIFT_MS } from './constants';
+import { BREAK_KEYS, BREAK_LIMITS, DEFAULT_DASH_WIDGETS, GRACE_MS, SHIFT_MS } from './constants';
 import { dateString, dayIndexMonSat } from './dates';
 import { computePoints } from './points';
 import { alignWeek, isPerfectWeek } from './week';
@@ -64,6 +64,8 @@ export function defaultSettings() {
     soundscapeVolume: 0.6,
     deepWork: false,
     onboarded: false,
+    dashWidgets: [...DEFAULT_DASH_WIDGETS],
+    dashNote: '',
   };
 }
 

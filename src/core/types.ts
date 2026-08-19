@@ -136,6 +136,22 @@ export interface Perks {
 
 export type ThemeId = 'cozy' | 'midnight' | 'sunrise';
 export type Appearance = 'system' | 'light' | 'dark';
+
+/**
+ * The cards a user can arrange on the Today page. 'focus' (the timer / settle
+ * in / day-complete hero) is always present; everything else can be hidden.
+ * Ids are persisted — never rename one, add new ids instead.
+ */
+export type DashWidgetId =
+  | 'focus'
+  | 'plan'
+  | 'breathers'
+  | 'wins'
+  | 'points'
+  | 'week'
+  | 'den'
+  | 'clock'
+  | 'note';
 export type SoundscapeId =
   | 'rain'
   | 'cafe'
@@ -160,6 +176,10 @@ export interface Settings {
   deepWork: boolean;
   /** first-run onboarding completed */
   onboarded: boolean;
+  /** Today-page widgets, in display order; presence = enabled ('focus' always present) */
+  dashWidgets: DashWidgetId[];
+  /** free-text contents of the Today-page note widget */
+  dashNote: string;
 }
 
 /** The single, versioned, persisted state object. */

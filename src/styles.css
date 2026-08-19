@@ -438,16 +438,147 @@ p { margin: 0; }
   gap: 1rem;
   align-items: start;
 }
+.dashboard.no-side { grid-template-columns: 1fr; }
 .dash-main { min-width: 0; }
 .dash-main > * + * { margin-top: 1rem; }
 .dash-side { position: sticky; top: 4.5rem; }
 .dash-side > * + * { margin-top: 1rem; }
-.dash-two {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+
+/* ── Today-page customization (widgets) ──────────────────────────────────── */
+
+.dash-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  min-height: 2rem;
 }
-.dash-two .card { margin: 0; }
+.dash-toolbar-hint { margin-right: auto; font-size: 0.85rem; }
+
+.dash-tray {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.85rem;
+}
+
+.dash-widget { min-width: 0; }
+.dash-widget.is-editing {
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 0.35rem;
+}
+.dash-widget-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.1rem 0.3rem 0.4rem;
+}
+.dash-widget-name { font-size: 0.8rem; font-weight: 700; color: var(--ink-soft); }
+.dash-widget-tools { display: flex; gap: 0.25rem; }
+.dash-widget-tools button {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.dash-widget-tools button:hover:not([disabled]) { border-color: var(--accent); }
+.dash-widget-tools button[disabled] { opacity: 0.4; cursor: default; }
+/* While arranging, the cards themselves are inert — clicks belong to the bar. */
+.dash-widget.is-editing .dash-widget-body { pointer-events: none; opacity: 0.85; }
+
+.dash-sleeping { text-align: center; }
+
+/* ── Clock widget ────────────────────────────────────────────────────────── */
+
+.clock-card { text-align: center; }
+.clock-face { display: flex; align-items: baseline; justify-content: center; gap: 0.15rem; }
+.clock-time { font-size: 2.6rem; font-weight: 700; letter-spacing: 0.01em; }
+.clock-secs { font-size: 1.2rem; font-weight: 600; color: var(--ink-soft); }
+.clock-ampm { font-size: 0.9rem; font-weight: 700; color: var(--ink-soft); margin-left: 0.3rem; }
+.clock-date { margin-top: 0.15rem; font-size: 0.9rem; }
+
+/* ── Note widget ─────────────────────────────────────────────────────────── */
+
+.note-input {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/* ── Today's plan / report widget ────────────────────────────────────────── */
+
+.card-head-side { display: flex; align-items: center; gap: 0.6rem; }
+
+.tplan-add .composer-feedback { margin-top: 0.35rem; }
+.tplan-list { list-style: none; margin: 0; padding: 0; }
+.tplan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.45rem 0 0.45rem 0.6rem;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid var(--prio, var(--line));
+  font-size: 0.9rem;
+}
+.tplan-item.is-done { opacity: 0.62; }
+.tplan-item.is-done .tplan-title { text-decoration: line-through; }
+.tplan-title { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
+.tplan-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.tplan-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 0.42rem;
+  border-radius: 999px;
+  background: var(--prio, var(--line-strong));
+}
+
+.report-group { margin-bottom: 0.8rem; }
+.report-h {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin-bottom: 0.3rem;
+}
+.report-h-done { color: var(--work); }
+.report-h-missed { color: var(--offline); }
+.report-list { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+.report-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.report-mark { flex: none; width: 1rem; text-align: center; font-weight: 800; }
+.report-row.is-done .report-mark { color: var(--work); }
+.report-row.is-done .tplan-title { font-weight: 500; }
+.report-row.is-missed .report-mark { color: var(--offline); }
+
+.report-tomorrow { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 2px solid var(--line); }
 
 /* ── Status card ─────────────────────────────────────────────────────────── */
 
@@ -934,7 +1065,6 @@ p { margin: 0; }
 }
 
 @media (max-width: 700px) {
-  .dash-two { grid-template-columns: 1fr; }
   .switcher { grid-template-columns: repeat(2, 1fr); }
   .tab-label { display: none; }
   .tab-icon { font-size: 1.1rem; }
