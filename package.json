@@ -1,7 +1,7 @@
 {
   "name": "focus-den",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.5.1",
   "type": "module",
   "description": "Focus Den — a single-user, focus-driven shift tracker with a cozy pixel room.",
   "engines": {
@@ -13,6 +13,7 @@
     "dev:all": "concurrently -k -n web,api -c cyan,magenta \"npm run dev\" \"npm run server\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "tauri": "tauri",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
