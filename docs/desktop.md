@@ -51,8 +51,9 @@ shipped apps can never self-update again — keep a backup.**
   `tauri icon`); regenerate from any new 1024 PNG.
 - **Updater** — `tauri-plugin-updater` against
   `Focus-Den/releases/latest/download/latest.json`. Active users get
-  prompted automatically: `UpdateBanner.tsx` checks on launch + every 4 h
-  and shows a dismissible "Update & restart" toast (never auto-restarts);
+  prompted automatically: `UpdateBanner.tsx` checks on launch, every 4 h,
+  and on window focus/visibility (throttled to one check per 10 min) and
+  shows a dismissible "Update & restart" toast (never auto-restarts);
   Settings keeps a manual check card (`DesktopUpdate.tsx`). Builds ≤ 2.6.0
   predate the banner — those users must check via Settings once.
 - **CI** — `desktop.yml`: macOS universal + Windows matrix on `v*` tags,
