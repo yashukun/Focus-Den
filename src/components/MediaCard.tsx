@@ -19,9 +19,23 @@ export interface NowPlaying {
 
 const POLL_MS = 2000;
 
-export function MediaCard() {
+export interface MediaCardProps {
+  /** notified when a media session appears/disappears (Dashboard uses this
+   * to sink the idle card to the bottom of its column) */
+  onActiveChange?: (active: boolean) => void;
+}
+
+export function MediaCard({ onActiveChange }: MediaCardProps = {}) {
   const [np, setNp] = useState<NowPlaying | null>(null);
   const alive = useRef(true);
+
+  const notify = useRef(onActiveChange);
+  notify.current = onActiveChange;
+  useEffect(() => {
+    notify.current?.(np !== null);
+  }, [np]);
+  // On unmount, report inactive so a hidden card doesn't pin a stale order.
+  useEffect(() => () => notify.current?.(false), []);
 
   useEffect(() => {
     alive.current = true;

@@ -111,6 +111,33 @@ export function Settings({ state }: SettingsProps) {
       </section>
 
       <section className="card">
+        <div className="card-head"><h2>Today page</h2></div>
+        <div className="setting-row">
+          <span className="equip-label">Focus timer</span>
+          <div className="equip-options">
+            <button
+              className={`btn btn-sm chip-toggle ${settings.focusTimer === 'dock' ? 'is-on' : ''}`}
+              aria-pressed={settings.focusTimer === 'dock'}
+              onClick={() => store.setFocusTimer('dock')}
+            >
+              Corner dock
+            </button>
+            <button
+              className={`btn btn-sm chip-toggle ${settings.focusTimer === 'card' ? 'is-on' : ''}`}
+              aria-pressed={settings.focusTimer === 'card'}
+              onClick={() => store.setFocusTimer('card')}
+            >
+              Compact card
+            </button>
+          </div>
+        </div>
+        <p className="muted">
+          Corner dock keeps the timer as a small collapsible pill in the bottom-left of the
+          Today page; Compact card keeps it in the layout as a smaller card.
+        </p>
+      </section>
+
+      <section className="card">
         <div className="card-head"><h2>Soundscape</h2></div>
         <div className="setting-row">
           <span className="equip-label">Ambience</span>

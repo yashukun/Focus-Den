@@ -3,7 +3,7 @@
  * log), laid out as three panes: a compact always-visible month calendar in
  * the left rail, the selected day's task list in the middle, and a detail
  * panel that opens when a task is selected. Adding is title-first (type,
- * Enter) — the new task auto-selects so deadline / schedule / priority / rich
+ * Enter) — the new task auto-selects so priority / length / rich
  * description are each one click away in the detail panel.
  *
  * Rule: current and upcoming days are editable; past days are locked (view only).
@@ -13,11 +13,11 @@ import { useEffect, useRef, useState } from 'react';
 import {
   addDays,
   dateString,
-  fmtDeadline,
   formatDateLabel,
+  formatHM,
   formatSlotTime,
   isDateEditable,
-  isTicketOverdue,
+  liveSpentMs,
   monthMatrix,
   monthOf,
   monthTitle,
@@ -63,13 +63,6 @@ function lengthLabel(min: number): string {
   if (h && m) return `${h} h ${m} min`;
   if (h) return `${h} h`;
   return `${m} min`;
-}
-
-/** Epoch ms → value for <input type="datetime-local"> (local time). */
-function toLocalInput(ms: number): string {
-  const d = new Date(ms);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export interface PlanViewProps {
@@ -121,7 +114,6 @@ export function PlanView({ state, now }: PlanViewProps) {
       key={selected.id}
       ticket={selected}
       dateKey={selectedDay}
-      todayKey={todayKey}
       now={now}
       editable={editable}
       onClose={() => setSelectedId(null)}
@@ -185,7 +177,6 @@ export function PlanView({ state, now }: PlanViewProps) {
             state={state}
             dateKey={selectedDay}
             todayKey={todayKey}
-            now={now}
             selectedId={selected?.id ?? null}
             onSelect={setSelectedId}
             onAdded={(title) => setPendingTitle(title)}
@@ -292,7 +283,6 @@ function DayPanel({
   state,
   dateKey,
   todayKey,
-  now,
   selectedId,
   onSelect,
   onAdded,
@@ -300,7 +290,6 @@ function DayPanel({
   state: State;
   dateKey: string;
   todayKey: string;
-  now: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdded: (titleKey: string) => void;
@@ -406,9 +395,7 @@ function DayPanel({
               key={t.id}
               ticket={t}
               dateKey={dateKey}
-              todayKey={todayKey}
               editable={editable}
-              now={now}
               selected={t.id === selectedId}
               menuOpen={menuFor === t.id}
               onToggleMenu={() => setMenuFor((v) => (v === t.id ? null : t.id))}
@@ -541,9 +528,7 @@ function Composer({ dateKey, onAdded }: { dateKey: string; onAdded: (titleKey: s
 function TicketRow({
   ticket,
   dateKey,
-  todayKey,
   editable,
-  now,
   selected,
   menuOpen,
   onToggleMenu,
@@ -552,16 +537,13 @@ function TicketRow({
 }: {
   ticket: PlanTicket;
   dateKey: string;
-  todayKey: string;
   editable: boolean;
-  now: number;
   selected: boolean;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
   onSelect: () => void;
 }) {
-  const overdue = isTicketOverdue(ticket, now);
   const done = ticket.status === 'done';
 
   function toggleDone(e: React.MouseEvent) {
@@ -648,15 +630,90 @@ function TicketRow({
           {ticket.startMin == null && ticket.durationMin != null && (
             <span className="meta-chip mono" title="Task length">◔ {lengthLabel(ticket.durationMin)}</span>
           )}
-          {ticket.deadlineMs != null && (
-            <span className={`meta-chip mono ${overdue ? 'is-over' : ''}`}>
-              ⚑ {fmtDeadline(ticket.deadlineMs, todayKey)}
-            </span>
-          )}
           {(ticket.descHtml || ticket.notes) && <span className="meta-chip" title="Has description">≡</span>}
         </span>
       </div>
     </li>
+  );
+}
+
+// ── Length: presets + a custom h/min entry ───────────────────────────────────
+
+function LengthField({
+  ticket,
+  dateKey,
+  editable,
+}: {
+  ticket: PlanTicket;
+  dateKey: string;
+  editable: boolean;
+}) {
+  const isPreset = ticket.durationMin == null || LENGTHS.some((l) => l.min === ticket.durationMin);
+  const [custom, setCustom] = useState(!isPreset);
+
+  function commitCustom(h: number, m: number) {
+    const total = Math.max(5, Math.min(24 * 60, Math.round(h) * 60 + Math.round(m)));
+    store.updatePlanTicket(dateKey, ticket.id, { durationMin: total });
+  }
+
+  const curH = Math.floor((ticket.durationMin ?? 60) / 60);
+  const curM = (ticket.durationMin ?? 60) % 60;
+
+  return (
+    <div className="detail-field" role="group" aria-label="Length">
+      <span className="detail-label">Length</span>
+      {editable ? (
+        <div className="detail-inline detail-length-row">
+          <select
+            className="input detail-length"
+            value={custom ? 'custom' : ticket.durationMin ?? ''}
+            onChange={(e) => {
+              if (e.target.value === 'custom') {
+                setCustom(true);
+                return;
+              }
+              setCustom(false);
+              const min = e.target.value ? Number(e.target.value) : undefined;
+              store.updatePlanTicket(dateKey, ticket.id, { durationMin: min });
+            }}
+            aria-label="Task length"
+          >
+            <option value="">1 h · default</option>
+            {LENGTHS.map((l) => (
+              <option key={l.min} value={l.min}>{l.label}</option>
+            ))}
+            <option value="custom">Custom…</option>
+          </select>
+          {custom && (
+            <span className="detail-custom-len">
+              <input
+                className="input detail-len-num"
+                type="number"
+                min={0}
+                max={24}
+                defaultValue={curH}
+                aria-label="Hours"
+                onChange={(e) => commitCustom(Number(e.target.value) || 0, curM)}
+              />
+              <span className="muted">h</span>
+              <input
+                className="input detail-len-num"
+                type="number"
+                min={0}
+                max={59}
+                step={5}
+                defaultValue={curM}
+                aria-label="Minutes"
+                onChange={(e) => commitCustom(curH, Number(e.target.value) || 0)}
+              />
+              <span className="muted">min</span>
+            </span>
+          )}
+        </div>
+      ) : (
+        <span className="mono">{ticket.durationMin ? lengthLabel(ticket.durationMin) : '1 h'}</span>
+      )}
+    </div>
   );
 }
 
@@ -665,14 +722,12 @@ function TicketRow({
 function DetailPanel({
   ticket,
   dateKey,
-  todayKey,
   now,
   editable,
   onClose,
 }: {
   ticket: PlanTicket;
   dateKey: string;
-  todayKey: string;
   now: number;
   editable: boolean;
   onClose: () => void;
@@ -683,7 +738,6 @@ function DetailPanel({
   // Esc backs out of the details — edits auto-save, so nothing is lost.
   useEscape(onClose);
 
-  const overdue = isTicketOverdue(ticket, now);
   const initialDesc = ticket.descHtml ?? (ticket.notes ? textToDescHtml(ticket.notes) : '');
 
   function saveTitle() {
@@ -768,113 +822,18 @@ function DetailPanel({
         </div>
       </div>
 
-      <div className="detail-field" role="group" aria-label="Deadline">
-        <span className="detail-label">Deadline</span>
-        <div className="detail-inline">
-          {editable ? (
-            <>
-              <input
-                className="input detail-deadline"
-                type="datetime-local"
-                value={ticket.deadlineMs != null ? toLocalInput(ticket.deadlineMs) : ''}
-                onChange={(e) => {
-                  const ms = e.target.value ? new Date(e.target.value).getTime() : NaN;
-                  store.updatePlanTicket(dateKey, ticket.id, {
-                    deadlineMs: Number.isFinite(ms) ? ms : undefined,
-                  });
-                }}
-                aria-label="Deadline date and time"
-              />
-              {ticket.deadlineMs != null && (
-                <button
-                  className="btn btn-sm"
-                  data-sound="none"
-                  onClick={() => store.updatePlanTicket(dateKey, ticket.id, { deadlineMs: undefined })}
-                >
-                  Clear
-                </button>
-              )}
-            </>
-          ) : (
-            <span className="mono">{ticket.deadlineMs != null ? fmtDeadline(ticket.deadlineMs, todayKey) : '—'}</span>
-          )}
-          {overdue && <span className="badge badge-overdue">Overdue</span>}
-        </div>
-      </div>
+      <LengthField ticket={ticket} dateKey={dateKey} editable={editable} />
 
-      <div className="detail-field" role="group" aria-label="Scheduled slot">
-        <span className="detail-label">Scheduled</span>
-        <div className="detail-inline">
-          {editable ? (
-            <>
-              <input
-                className="input detail-deadline"
-                type="time"
-                step={300}
-                value={ticket.startMin != null ? formatSlotTime(ticket.startMin) : ''}
-                onChange={(e) => {
-                  if (!e.target.value) {
-                    store.updatePlanTicket(dateKey, ticket.id, { startMin: undefined });
-                    return;
-                  }
-                  const [h, m] = e.target.value.split(':').map(Number);
-                  store.updatePlanTicket(dateKey, ticket.id, { startMin: h * 60 + m });
-                }}
-                aria-label="Scheduled start time"
-              />
-              {ticket.startMin != null ? (
-                <>
-                  <span className="muted mono">
-                    – {formatSlotTime(ticket.startMin + (ticket.durationMin ?? 60))}
-                  </span>
-                  <button
-                    className="btn btn-sm"
-                    data-sound="none"
-                    onClick={() => store.updatePlanTicket(dateKey, ticket.id, { startMin: undefined })}
-                  >
-                    Clear
-                  </button>
-                </>
-              ) : (
-                <span className="muted detail-slot-hint">Anytime — pick a start to slot it on the week grid</span>
-              )}
-            </>
-          ) : (
-            <span className="mono">
-              {ticket.startMin != null
-                ? `${formatSlotTime(ticket.startMin)} – ${formatSlotTime(ticket.startMin + (ticket.durationMin ?? 60))}`
-                : '—'}
-            </span>
-          )}
+      {/* the task stopwatch — ticks live while the ticket is In progress */}
+      {liveSpentMs(ticket, now) > 0 && (
+        <div className="detail-field" role="group" aria-label="Time tracked">
+          <span className="detail-label">Tracked</span>
+          <span className="mono tone-work">
+            {formatHM(liveSpentMs(ticket, now))}
+            {ticket.status === 'in_progress' && <span className="muted"> · running</span>}
+          </span>
         </div>
-      </div>
-
-      <div className="detail-field" role="group" aria-label="Length">
-        <span className="detail-label">Length</span>
-        {editable ? (
-          <select
-            className="input detail-length"
-            value={ticket.durationMin ?? ''}
-            onChange={(e) => {
-              const min = e.target.value ? Number(e.target.value) : undefined;
-              store.updatePlanTicket(dateKey, ticket.id, { durationMin: min });
-            }}
-            aria-label="Task length"
-          >
-            <option value="">1 h · default</option>
-            {(ticket.durationMin && !LENGTHS.some((l) => l.min === ticket.durationMin)
-              ? [...LENGTHS, { min: ticket.durationMin, label: lengthLabel(ticket.durationMin) }].sort(
-                  (a, b) => a.min - b.min,
-                )
-              : LENGTHS
-            ).map((l) => (
-              <option key={l.min} value={l.min}>{l.label}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="mono">{ticket.durationMin ? lengthLabel(ticket.durationMin) : '1 h'}</span>
-        )}
-      </div>
+      )}
 
       <div className="detail-field detail-desc" role="group" aria-label="Description">
         <span className="detail-label">Description</span>

@@ -309,14 +309,26 @@ p { margin: 0; }
 
 /* ── Tab bar ─────────────────────────────────────────────────────────────── */
 
+/* Sticky under the header; scrolling condenses it into a floating icon pill
+   (see App.tsx — which also drives the dock-style hover magnification). */
 .tabbar {
+  position: sticky;
+  top: 3.4rem;
+  z-index: 19;
   display: flex;
   gap: 0.35rem;
   padding: 0.35rem;
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem;
+  max-width: 100%;
   background: var(--surface-2);
   border: 2px solid var(--line);
   border-radius: var(--radius);
+  transition:
+    max-width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.35s ease,
+    box-shadow 0.35s ease;
 }
 .tab {
   flex: 1;
@@ -333,6 +345,9 @@ p { margin: 0; }
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
+  transform-origin: 50% 100%;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.18s ease-out, padding 0.3s ease;
 }
 .tab:hover { color: var(--ink); }
 .tab.is-active {
@@ -341,6 +356,31 @@ p { margin: 0; }
   box-shadow: var(--shadow);
 }
 .tab-icon { font-size: 0.95rem; }
+
+.tabbar.is-compact {
+  /* rises into the header row, centered between the brand and the controls */
+  top: 0.45rem;
+  z-index: 21;
+  max-width: 340px;
+  padding: 0.25rem;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+/* narrow windows: the header row has no free middle, stay below it */
+@media (max-width: 880px) {
+  .tabbar.is-compact { top: 3.4rem; z-index: 19; }
+}
+.tabbar.is-compact .tab {
+  flex: 1 1 auto;
+  padding: 0.4rem 0.5rem;
+  border-radius: 999px;
+  will-change: transform;
+}
+/* Icons only — except the current page, which keeps its name + highlight. */
+.tabbar.is-compact .tab:not(.is-active) .tab-label { display: none; }
+.tabbar.is-compact .tab-icon { font-size: 1.05rem; }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 
@@ -507,6 +547,91 @@ p { margin: 0; }
 
 .dash-sleeping { text-align: center; }
 
+/* ── Compact ('sm') widget views ─────────────────────────────────────────────
+   One size class on the wrapper; each widget trims its secondary content. */
+.dash-sm .card { padding: 0.75rem 0.85rem; }
+.dash-sm .card-head { margin-bottom: 0.4rem; }
+.dash-sm .card-head h2 { font-size: 0.86rem; }
+.dash-sm .clock-time { font-size: 1.9rem; }
+.dash-sm .clock-secs { font-size: 1rem; }
+.dash-sm .clock-date { display: none; }
+.dash-sm .tplan-add { display: none; }
+.dash-sm .tplan-meta { display: none; }
+.dash-sm .tplan-item { padding: 0.35rem 0.5rem; font-size: 0.85rem; }
+.dash-sm .points-card p.muted { display: none; }
+.dash-sm .points-lines { display: none; }
+.dash-sm .preview-foot { display: none; }
+.dash-sm .note-input { min-height: 64px; }
+.dash-sm .media-artist { display: none; }
+.dash-sm .break-chips { gap: 0.3rem; }
+.dash-sm .balance-big { font-size: 1.5rem; }
+/* the svg normally stretches to the column — sm caps it so it reads smaller */
+.dash-sm .room-preview-btn { max-width: 210px; margin: 0 auto; display: block; }
+
+/* ── Compact focus hero (the 'card' mode + the dock's panel) ───────────────── */
+.focus-compact .hero-card { padding: 0.9rem 1rem; }
+.focus-compact .hero-title { font-size: 1.15rem; }
+.focus-compact .btn-xl { padding: 0.65rem 1rem; font-size: 1rem; }
+.focus-compact .status-timer { font-size: 2rem; }
+.focus-compact .status-card { padding: 0.9rem 1rem; }
+.focus-compact .switch-btn { padding: 0.45rem 0.4rem; }
+.focus-compact .summary-grid { gap: 0.4rem; }
+
+/* ── Focus dock — the timer as a collapsible bottom-left pill ──────────────── */
+.focus-dock {
+  position: fixed;
+  left: max(0.9rem, env(safe-area-inset-left));
+  bottom: max(0.9rem, env(safe-area-inset-bottom));
+  z-index: 24; /* above content, below modal overlays */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  max-width: min(380px, calc(100vw - 1.8rem));
+}
+.focus-dock-panel {
+  width: min(360px, calc(100vw - 1.8rem));
+  max-height: min(70vh, 540px);
+  overflow-y: auto;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg, 0 18px 40px rgba(0, 0, 0, 0.28));
+  animation: dockRise 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.focus-dock-panel .card { margin: 0; }
+.focus-dock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px);
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--line-strong);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.focus-dock-pill:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--line-strong); }
+.focus-dock-pill:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--line-strong); }
+.focus-dock-pill .status-dot { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+.focus-dock-pill.tone-work { color: var(--work); }
+.focus-dock-pill.tone-break { color: var(--break); }
+.focus-dock-pill.tone-offline { color: var(--offline); }
+.focus-dock-label { color: var(--ink); }
+.focus-dock-time { font-size: 0.92rem; }
+.focus-dock-chevron { color: var(--ink-soft); font-size: 0.8rem; }
+@keyframes dockRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-dock-panel { animation: none; }
+}
+
 /* ── Clock widget ────────────────────────────────────────────────────────── */
 
 .clock-card { text-align: center; }
@@ -515,6 +640,136 @@ p { margin: 0; }
 .clock-secs { font-size: 1.2rem; font-weight: 600; color: var(--ink-soft); }
 .clock-ampm { font-size: 0.9rem; font-weight: 700; color: var(--ink-soft); margin-left: 0.3rem; }
 .clock-date { margin-top: 0.15rem; font-size: 0.9rem; }
+
+/* ── Soundscape widget — animated pixel scene as the card background ──────
+   Motion runs only while the sound is on; reduced-motion freezes it all. */
+
+.ss-card {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  min-height: 150px;
+  display: flex;
+  align-items: flex-end;
+}
+.dash-sm .ss-card { min-height: 104px; }
+.ss-art { position: absolute; inset: 0; }
+.ss-art svg { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.ss-card:not(.is-on) .ss-art * { animation-play-state: paused; }
+
+.ss-ui {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1.4rem 0.6rem 0.55rem;
+  background: linear-gradient(to top, rgba(12, 12, 16, 0.62), rgba(12, 12, 16, 0));
+}
+.ss-name { flex: 1; min-width: 0; color: #f5efe2; line-height: 1.15; }
+.ss-name h2 { font-size: 0.95rem; margin: 0; color: inherit; }
+.ss-state { font-size: 0.68rem; font-weight: 600; opacity: 0.8; }
+.ss-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #f5efe2;
+  background: rgba(20, 20, 28, 0.45);
+  border: 1.5px solid rgba(245, 239, 226, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.ss-btn:hover { background: rgba(20, 20, 28, 0.7); border-color: rgba(245, 239, 226, 0.7); }
+.ss-btn:active { transform: scale(0.92); }
+.ss-play { font-size: 0.68rem; }
+.ss-play.is-on { background: rgba(245, 239, 226, 0.85); color: #2a2620; border-color: transparent; }
+
+/* scene loops — all slow and gentle */
+@keyframes ssRain {
+  from { transform: translateY(0); }
+  to { transform: translateY(104px); }
+}
+.ss-rain { animation: ssRain 1.6s linear infinite; }
+@keyframes ssDrift {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(9px); }
+  100% { transform: translateX(0); }
+}
+.ss-cloud-a { animation: ssDrift 26s ease-in-out infinite; }
+.ss-cloud-b { animation: ssDrift 34s ease-in-out infinite reverse; }
+@keyframes ssBlink {
+  0%, 82%, 100% { opacity: 0.85; }
+  88%, 94% { opacity: 0.15; }
+}
+.ss-blink-a { animation: ssBlink 6.5s steps(1) infinite; }
+.ss-blink-b { animation: ssBlink 8.2s steps(1) infinite 2.4s; }
+@keyframes ssGlow {
+  0%, 100% { opacity: 0.14; }
+  50% { opacity: 0.24; }
+}
+.ss-glow { animation: ssGlow 3.4s ease-in-out infinite; }
+@keyframes ssSteam {
+  0% { transform: translateY(0); opacity: 0.6; }
+  100% { transform: translateY(-9px); opacity: 0; }
+}
+.ss-steam-a { animation: ssSteam 2.6s ease-out infinite; }
+.ss-steam-b { animation: ssSteam 3.1s ease-out infinite 1.2s; }
+@keyframes ssFlame {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(1px) scaleY(0.94); }
+}
+.ss-flame { animation: ssFlame 0.9s steps(2) infinite; transform-origin: 80px 74px; }
+.ss-flame-mid { animation: ssFlame 0.7s steps(2) infinite 0.2s; transform-origin: 80px 74px; }
+.ss-flame-core { animation: ssFlame 0.5s steps(2) infinite 0.1s; transform-origin: 80px 74px; }
+@keyframes ssEmber {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-22px); opacity: 0; }
+}
+.ss-ember-a { animation: ssEmber 2.8s ease-out infinite; }
+.ss-ember-b { animation: ssEmber 3.4s ease-out infinite 1.1s; }
+.ss-ember-c { animation: ssEmber 2.2s ease-out infinite 0.6s; }
+@keyframes ssFirefly {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  30% { opacity: 1; }
+  50% { opacity: 0.5; transform: translate(3px, -3px); }
+  70% { opacity: 1; }
+}
+.ss-firefly-a { animation: ssFirefly 5.2s ease-in-out infinite; }
+.ss-firefly-b { animation: ssFirefly 6.4s ease-in-out infinite 1.8s; }
+.ss-firefly-c { animation: ssFirefly 7.1s ease-in-out infinite 3.1s; }
+@keyframes ssWave {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(16px); }
+  100% { transform: translateX(0); }
+}
+.ss-wave-a { animation: ssWave 7s ease-in-out infinite; }
+.ss-wave-b { animation: ssWave 9s ease-in-out infinite reverse; }
+.ss-wave-c { animation: ssWave 11s ease-in-out infinite; }
+@keyframes ssSway {
+  0%, 100% { transform: skewX(0deg); }
+  50% { transform: skewX(6deg); }
+}
+.ss-sway { animation: ssSway 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes ssLeaf {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate(172px, 10px); opacity: 0; }
+}
+.ss-leaf-a { animation: ssLeaf 9s linear infinite; }
+.ss-leaf-b { animation: ssLeaf 12s linear infinite 4s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-art * { animation: none !important; }
+}
 
 /* ── Update toast (desktop only) ─────────────────────────────────────────── */
 
@@ -583,20 +838,71 @@ p { margin: 0; }
 .card-head-side { display: flex; align-items: center; gap: 0.6rem; }
 
 .tplan-add .composer-feedback { margin-top: 0.35rem; }
-.tplan-list { list-style: none; margin: 0; padding: 0; }
+
+/* Checklist rows — a LIGHT neubrutalist touch, matching the buttons' chunky
+   2px borders + hard edges: each intention is a little card with an offset
+   shadow that lifts on hover and settles once done. Cozy palette untouched. */
+.tplan-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0 4px 4px 0; /* room for the offset shadows inside the card */
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
 .tplan-item {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  padding: 0.45rem 0 0.45rem 0.6rem;
-  border-top: 1px solid var(--line);
-  border-left: 3px solid var(--prio, var(--line));
+  padding: 0.5rem 0.6rem;
   font-size: 0.9rem;
+  background: var(--surface);
+  border: 2px solid var(--line-strong);
+  border-left: 5px solid var(--prio, var(--line-strong));
+  border-radius: 7px;
+  box-shadow: 3px 3px 0 var(--line-strong);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.2s ease,
+    background 0.2s ease;
 }
-.tplan-item.is-done { opacity: 0.62; }
+.tplan-item:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--line-strong); }
+.tplan-item.is-done {
+  opacity: 0.72;
+  background: color-mix(in srgb, var(--work) 7%, var(--surface));
+  box-shadow: 1px 1px 0 var(--line-strong);
+}
+.tplan-item.is-done:hover { transform: none; box-shadow: 1px 1px 0 var(--line-strong); }
 .tplan-item.is-done .tplan-title { text-decoration: line-through; }
 .tplan-title { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
 .tplan-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+
+/* Square chunky check that presses INTO its shadow when clicked. */
+.tplan-card .ticket-check {
+  border-radius: 6px;
+  border-color: var(--line-strong);
+  box-shadow: 2px 2px 0 var(--line-strong);
+  margin-top: 0.08rem;
+}
+.tplan-card .ticket-check:hover { border-color: var(--work); }
+.tplan-card .ticket-check:active:not([disabled]) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--line-strong);
+}
+.tplan-card .ticket-check.is-done { box-shadow: 1px 1px 0 var(--line-strong); }
+
+/* The "n/m done" pill + meta chips join the chunky-chip family. */
+.tplan-card .day-progress {
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 var(--line-strong);
+}
+.tplan-card .meta-chip {
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: 5px;
+  padding: 0.12rem 0.4rem;
+}
 .tplan-dot {
   flex: none;
   width: 8px;
@@ -632,6 +938,21 @@ p { margin: 0; }
 .report-row.is-missed .report-mark { color: var(--offline); }
 
 .report-tomorrow { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 2px solid var(--line); }
+
+/* Task times (Statistics) */
+.jr-tasktimes { list-style: none; margin: 0; padding: 0; }
+.jr-tasktime {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.4rem 0.25rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.jr-tasktime-date { font-size: 0.75rem; color: var(--ink-soft); white-space: nowrap; }
+.jr-tasktime-title { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jr-tasktime-spent { font-size: 0.82rem; font-weight: 700; }
 
 /* ── Status card ─────────────────────────────────────────────────────────── */
 
@@ -753,17 +1074,6 @@ p { margin: 0; }
 }
 .input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 
-.task-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
-.task-list li {
-  display: flex;
-  gap: 0.6rem;
-  padding: 0.4rem 0;
-  border-top: 1px solid var(--line);
-  font-size: 0.9rem;
-}
-.task-time { color: var(--ink-soft); font-size: 0.78rem; white-space: nowrap; padding-top: 0.1rem; }
-.task-text { word-break: break-word; }
-
 /* ── Points / preview ────────────────────────────────────────────────────── */
 
 .balance { margin-bottom: 0.75rem; }
@@ -804,6 +1114,19 @@ p { margin: 0; }
 .hero-title { font-size: 1.6rem; }
 .hero-card .summary-grid { margin: 1rem 0; text-align: left; }
 
+/* ── "Not tired?" (day-complete card) ────────────────────────────────────── */
+
+.notired {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
 /* ── Streak ──────────────────────────────────────────────────────────────── */
 
 .streak-dots { display: flex; gap: 0.4rem; }
@@ -829,6 +1152,22 @@ p { margin: 0; }
 .dot-off { opacity: 0.5; border-style: dashed; }
 .streak-caption { margin-top: 0.5rem; font-size: 0.82rem; color: var(--ink-soft); }
 
+/* Shirt color swatches (den customize) */
+.swatch {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.swatch:hover { transform: scale(1.1); }
+.swatch.is-on {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
 /* ── Room ────────────────────────────────────────────────────────────────── */
 
 .room-preview-card { text-align: center; }
@@ -847,8 +1186,10 @@ p { margin: 0; }
 .room-view { display: grid; grid-template-columns: 1fr 320px; gap: var(--space-4); align-items: start; }
 .room-stage {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-3);
   padding: clamp(1rem, 3.5vw, 1.75rem);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -896,6 +1237,34 @@ p { margin: 0; }
     0 12px 26px rgba(0, 0, 0, 0.18);
 }
 .room-controls > * + * { margin-top: var(--space-4); }
+
+/* Arrange mode — drag movable props around the big scene */
+.arrange-stage { display: flex; justify-content: center; width: 100%; }
+.arrange-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 520px;
+}
+.arrange-hint { flex: 1 1 14rem; font-size: 0.82rem; line-height: 1.35; }
+.is-arranging .arrange-stage { touch-action: none; user-select: none; }
+/* Overlays (night tint, vignette, glows) paint above the props and would
+   swallow every pointer — in arrange mode only the movable items are
+   hittable, via their invisible footprint rects (see RoomScene `Prop`). */
+.is-arranging .arrange-stage svg * { pointer-events: none; }
+.is-arranging .arrange-stage svg [data-item],
+.is-arranging .arrange-stage svg [data-item] * { pointer-events: all; }
+/* movable props glow softly so you can tell what's grabbable */
+.is-arranging [data-item] {
+  cursor: grab;
+  filter: drop-shadow(0 0 2px var(--focus));
+}
+.is-arranging .arrange-stage.is-dragging,
+.is-arranging .arrange-stage.is-dragging [data-item] { cursor: grabbing; }
+.arrange-nudge { margin-top: var(--space-3); font-size: 0.8rem; line-height: 1.4; }
 
 .equip-row { margin-bottom: var(--space-4); }
 .equip-row:last-child { margin-bottom: 0; }
@@ -1475,24 +1844,6 @@ p { margin: 0; }
 .freeze-days { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .freeze-msg { margin-top: 0.5rem; font-size: 0.85rem; font-weight: 600; }
 
-/* ── Task edit / delete ──────────────────────────────────────────────────── */
-
-.task-list li { align-items: center; }
-.task-actions { margin-left: auto; display: flex; gap: 0.25rem; opacity: 0.65; }
-.task-actions button {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-  padding: 0.1rem 0.3rem;
-  border-radius: 4px;
-}
-.task-actions button:hover { color: var(--ink); background: var(--surface-2); }
-.task-edit-form { display: flex; gap: 0.4rem; flex: 1; }
-.task-edit-form .input { padding: 0.3rem 0.5rem; font-size: 0.85rem; }
-
 /* ── Onboarding ──────────────────────────────────────────────────────────── */
 
 .onboard { width: min(460px, 100%); }
@@ -1552,6 +1903,7 @@ p { margin: 0; }
   animation: detailSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .plan-cal { position: sticky; top: 4.5rem; padding: var(--space-4); }
+
 .cal-today-btn { width: 100%; margin-top: var(--space-2); }
 
 /* Priority + status color tokens — one hue each, used everywhere they appear. */
@@ -1718,7 +2070,6 @@ p { margin: 0; }
   align-items: center;
   gap: 0.3rem;
 }
-.meta-chip.is-over { color: var(--danger); font-weight: 700; }
 
 /* Status chip (list) + its one-click menu */
 .status-menu-wrap { position: relative; flex: none; margin-top: 0.06rem; }
@@ -1841,13 +2192,10 @@ p { margin: 0; }
 }
 
 .detail-inline { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.detail-deadline { flex: 0 1 14rem; font-size: 0.85rem; padding: 0.32rem 0.5rem; }
 .detail-length { width: fit-content; font-size: 0.85rem; padding: 0.32rem 0.5rem; cursor: pointer; }
-.badge-overdue {
-  color: #fff;
-  background: var(--danger);
-  font-weight: 800;
-}
+.detail-length-row { flex-wrap: wrap; }
+.detail-custom-len { display: inline-flex; align-items: center; gap: 0.3rem; }
+.detail-len-num { width: 3.6rem; font-size: 0.85rem; padding: 0.32rem 0.4rem; }
 .detail-foot {
   display: flex;
   align-items: center;
@@ -2289,6 +2637,83 @@ p { margin: 0; }
 
 /* A newly added intention pops into the list. */
 .ticket-pop { animation: popCard 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── First-run den creator ───────────────────────────────────────────────── */
+
+.creator {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--surface) 60%, var(--paper)), var(--paper));
+  display: flex;
+  flex-direction: column;
+}
+.creator-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem clamp(1rem, 4vw, 2rem) 0;
+}
+.creator-head .home-brand { margin-bottom: 0; }
+.creator-body {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 0.5rem clamp(0.9rem, 4vw, 1.5rem) 3rem;
+  text-align: center;
+}
+.creator-title {
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  letter-spacing: -0.02em;
+  margin-top: 0.5rem;
+  animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.creator-sub {
+  max-width: 46ch;
+  margin: 0.4rem auto 1rem;
+  animation: riseIn 0.5s 0.06s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.creator-scene {
+  display: inline-block;
+  animation: riseIn 0.5s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.creator-step {
+  text-align: left;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 1rem 1.1rem;
+  margin-top: 1rem;
+  animation: riseIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.creator-step-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.creator-step-head h2 { font-size: 1.05rem; }
+.creator-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.creator-dots { display: flex; gap: 0.4rem; }
+.creator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.creator-dot.is-on { background: var(--accent); transform: scale(1.3); }
+.creator-nav-btns { display: flex; gap: 0.5rem; }
 
 /* ── Landing page ────────────────────────────────────────────────────────── */
 

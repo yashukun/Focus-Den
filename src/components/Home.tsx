@@ -88,6 +88,9 @@ export function Home({ state, onFocus }: HomeProps) {
             <RoomScene
               owned={state.owned}
               equipped={state.equipped}
+              den={state.den}
+              character={state.character}
+              placements={state.placements}
               width={400}
               className="home-scene-svg"
               title="Your den, waiting for you"

@@ -8,18 +8,20 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { isActive } from './core';
+import { isActive, isPristineState } from './core';
+import { motionOK } from './fx';
 import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume, warmup } from './audio';
 import { useNow, useStore } from './state/hooks';
 import { store } from './state/store';
 import { Home } from './components/Home';
-import { Dashboard } from './components/Dashboard';
+import { Dashboard, FocusDock } from './components/Dashboard';
 import { RoomView } from './components/RoomView';
 import { PlanView } from './components/PlanView';
 import { History } from './components/History';
 import { Settings } from './components/Settings';
 import { SummaryModal } from './components/SummaryModal';
 import { DeepWork } from './components/DeepWork';
+import { DenCreator } from './components/DenCreator';
 import { Onboarding } from './components/Onboarding';
 import { UpdateBanner } from './components/UpdateBanner';
 import { STATUS_META } from './components/statusMeta';
@@ -32,7 +34,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Today', icon: '⏱' },
   { id: 'plan', label: 'Plan', icon: '🗓' },
   { id: 'room', label: 'Den', icon: '🛋' },
-  { id: 'history', label: 'Journal', icon: '📖' },
+  { id: 'history', label: 'Stats', icon: '📊' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -42,6 +44,37 @@ export default function App() {
   const [view, setView] = useState<View>('home');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [soundOn, setSoundOn] = useState(() => !isMuted());
+
+  // The tab bar stays put and condenses to a floating icon pill once you
+  // scroll a little (hysteresis so it never flaps at the boundary).
+  const [navCompact, setNavCompact] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const onScroll = () => setNavCompact((c) => (c ? window.scrollY > 8 : window.scrollY > 48));
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Dock-style magnification for the compact pill: each icon scales by its
+  // distance to the cursor (gaussian falloff), like macOS with magnify on.
+  function magnifyNav(e: React.MouseEvent) {
+    if (!navCompact || !motionOK()) return;
+    navRef.current?.querySelectorAll<HTMLElement>('.tab').forEach((t) => {
+      const r = t.getBoundingClientRect();
+      const d = Math.abs(e.clientX - (r.left + r.width / 2));
+      const s = 1 + 0.3 * Math.exp(-((d / 90) ** 2));
+      t.style.transform = `translateY(${(-(s - 1) * 7).toFixed(1)}px) scale(${s.toFixed(3)})`;
+    });
+  }
+  function resetNavMagnify() {
+    navRef.current?.querySelectorAll<HTMLElement>('.tab').forEach((t) => {
+      t.style.transform = '';
+    });
+  }
+  useEffect(() => {
+    if (!navCompact) resetNavMagnify();
+  }, [navCompact]);
 
   const { settings } = state;
 
@@ -119,6 +152,12 @@ export default function App() {
     setView('den');
   }
 
+  // First run (or a full reset): build-your-den before anything else.
+  // Existing dens are never interrupted — the pristine check guards them.
+  if (!settings.denSetUp && isPristineState(state)) {
+    return <DenCreator state={state} />;
+  }
+
   // Landing page — the den keeps ticking behind it.
   if (view === 'home') {
     return (
@@ -180,7 +219,13 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="tabbar" aria-label="Primary">
+      <nav
+        ref={navRef}
+        className={`tabbar ${navCompact ? 'is-compact' : ''}`}
+        aria-label="Primary"
+        onMouseMove={magnifyNav}
+        onMouseLeave={resetNavMagnify}
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -210,6 +255,11 @@ export default function App() {
         {tab === 'settings' && <Settings state={state} />}
       </main>
 
+      {/* Sibling of <main> on purpose: its entrance animation retains a
+          transform, which would trap a fixed dock inside the screen. */}
+      {tab === 'dashboard' && settings.focusTimer === 'dock' && (
+        <FocusDock state={state} now={now} />
+      )}
       {!settings.onboarded && <Onboarding />}
       {summary && <SummaryModal summary={summary} onClose={() => store.dismissSummary()} />}
       {settings.deepWork && <DeepWork state={state} now={now} />}

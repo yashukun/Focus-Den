@@ -37,24 +37,27 @@ export const DASH_WIDGET_IDS: DashWidgetId[] = [
   'focus',
   'plan',
   'breathers',
-  'wins',
   'points',
   'week',
   'den',
   'clock',
   'note',
   'media',
+  'soundscape',
 ];
 
-/** Fresh-den layout: mirrors the classic dashboard, with the plan card on. */
+/**
+ * Fresh-den layout — main: plan + the mid-day cards; side rail: now-playing
+ * on top, then the den and the clock. Points/week live in the add tray.
+ */
 export const DEFAULT_DASH_WIDGETS: DashWidgetId[] = [
   'focus',
   'plan',
   'breathers',
-  'wins',
-  'week',
-  'points',
+  'media',
   'den',
+  'clock',
+  'soundscape',
 ];
 
 /** Ticket statuses in display order, with the labels every screen shares. */

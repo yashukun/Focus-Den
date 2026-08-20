@@ -9,21 +9,11 @@
  * everything else keeps flowing through src/state/persist.ts + store.ts.
  */
 
-import type { State } from '../core';
+import { isPristineState } from '../core';
 import { store } from './store';
 
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
-/** A den that has never really been used — safe to overwrite from the mirror. */
-function isPristine(s: State): boolean {
-  return (
-    s.points === 0 &&
-    s.history.length === 0 &&
-    Object.keys(s.plan.tickets).length === 0 &&
-    s.shift.date === null
-  );
 }
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -37,7 +27,7 @@ export async function initDesktopMirror(): Promise<void> {
   // Falls back to the daily backup when the main mirror is missing or won't
   // coerce — the user's schedule must survive anything.
   try {
-    if (isPristine(store.getState())) {
+    if (isPristineState(store.getState())) {
       const disk = await invoke<string | null>('load_state_file');
       const restored = disk != null && store.importJSON(disk);
       if (!restored) {

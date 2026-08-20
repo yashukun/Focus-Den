@@ -4,9 +4,11 @@ import {
   addTicket,
   freshPlan,
   isDateEditable,
+  liveSpentMs,
   moveTicketToDay,
   moveTicketToNextDay,
   removeTicket,
+  statusPatch,
   ticketsFor,
   updateTicket,
   type PlanState,
@@ -87,5 +89,48 @@ describe('plan: move to an arbitrary day', () => {
     expect(moveTicketToDay(p, TODAY, 'a', PAST, TODAY)).toBe(p);
     expect(moveTicketToDay(p, TODAY, 'missing', FUTURE, TODAY)).toBe(p);
     expect(moveTicketToDay(p, TODAY, 'a', TODAY, TODAY)).toBe(p);
+  });
+});
+
+describe('plan: the task stopwatch (statusPatch / liveSpentMs)', () => {
+  const T0 = new Date(2026, 5, 30, 9, 0).getTime();
+
+  it('starts on entering In progress and banks the stint on leaving', () => {
+    const t = tk('a');
+    const start = statusPatch(t, 'in_progress', T0);
+    expect(start).toEqual({ status: 'in_progress', inProgressSince: T0 });
+
+    const running = { ...t, ...start } as PlanTicket;
+    const stop = statusPatch(running, 'done', T0 + 25 * 60_000);
+    expect(stop.status).toBe('done');
+    expect(stop.spentMs).toBe(25 * 60_000);
+    expect(stop.inProgressSince).toBeUndefined();
+  });
+
+  it('accumulates across stints (in progress -> blocked -> in progress -> done)', () => {
+    let t = tk('a');
+    t = { ...t, ...statusPatch(t, 'in_progress', T0) } as PlanTicket;
+    t = { ...t, ...statusPatch(t, 'blocked', T0 + 10 * 60_000) } as PlanTicket;
+    expect(t.spentMs).toBe(10 * 60_000);
+    t = { ...t, ...statusPatch(t, 'in_progress', T0 + 60 * 60_000) } as PlanTicket;
+    t = { ...t, ...statusPatch(t, 'done', T0 + 75 * 60_000) } as PlanTicket;
+    expect(t.spentMs).toBe(25 * 60_000);
+    expect(t.inProgressSince).toBeUndefined();
+  });
+
+  it('liveSpentMs adds the running stint only while In progress', () => {
+    let t = tk('a');
+    expect(liveSpentMs(t, T0)).toBe(0);
+    t = { ...t, ...statusPatch(t, 'in_progress', T0) } as PlanTicket;
+    expect(liveSpentMs(t, T0 + 5 * 60_000)).toBe(5 * 60_000);
+    t = { ...t, ...statusPatch(t, 'done', T0 + 5 * 60_000) } as PlanTicket;
+    expect(liveSpentMs(t, T0 + 60 * 60_000)).toBe(5 * 60_000); // frozen once done
+  });
+
+  it('re-entering In progress while already running keeps the original start', () => {
+    let t = tk('a');
+    t = { ...t, ...statusPatch(t, 'in_progress', T0) } as PlanTicket;
+    const again = statusPatch(t, 'in_progress', T0 + 9 * 60_000);
+    expect(again.inProgressSince).toBeUndefined(); // no restart
   });
 });

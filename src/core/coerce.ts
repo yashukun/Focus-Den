@@ -16,12 +16,28 @@ import {
   TICKET_PRIORITY_IDS,
   TICKET_STATUS_IDS,
 } from './constants';
+import {
+  BODY_IDS,
+  clampPlacement,
+  DEN_OPTIONS,
+  DEN_PARTS,
+  SHIRT_IDS,
+  type PerchCtx,
+} from './den';
+import { getItem } from './items';
 import { defaultState } from './shift';
 import type {
   Appearance,
+  BodyId,
   BreakKey,
+  CharacterConfig,
   DashWidgetId,
+  DenConfig,
+  DenPart,
   Equipped,
+  FocusTimerMode,
+  Placement,
+  ShirtId,
   HistoryEntry,
   Perks,
   PlanState,
@@ -161,6 +177,21 @@ function coerceDashWidgets(v: unknown, base: DashWidgetId[]): DashWidgetId[] {
   return out;
 }
 
+/** Whitelist a per-widget record: known widget ids, values from `allowed`. */
+function coerceDashRecord<V extends string>(
+  v: unknown,
+  allowed: readonly V[],
+): Partial<Record<DashWidgetId, V>> {
+  const out: Partial<Record<DashWidgetId, V>> = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [key, val] of safeEntries(v)) {
+    if (!DASH_WIDGET_IDS.includes(key as DashWidgetId)) continue;
+    if (typeof val !== 'string' || !allowed.includes(val as V)) continue;
+    out[key as DashWidgetId] = val as V;
+  }
+  return out;
+}
+
 function coerceSettings(v: unknown, base: Settings): Settings {
   const obj = (v ?? {}) as Partial<Record<keyof Settings, unknown>>;
   return {
@@ -172,7 +203,11 @@ function coerceSettings(v: unknown, base: Settings): Settings {
     deepWork: bool(obj.deepWork, base.deepWork),
     onboarded: bool(obj.onboarded, base.onboarded),
     dashWidgets: coerceDashWidgets(obj.dashWidgets, base.dashWidgets),
+    dashCols: coerceDashRecord(obj.dashCols, ['main', 'side'] as const),
+    dashSizes: coerceDashRecord(obj.dashSizes, ['lg', 'sm'] as const),
+    focusTimer: enumOf<FocusTimerMode>(obj.focusTimer, ['dock', 'card'], base.focusTimer),
     dashNote: str(obj.dashNote, MAX_DASH_NOTE) ?? base.dashNote,
+    denSetUp: bool(obj.denSetUp, base.denSetUp),
   };
 }
 
@@ -274,12 +309,15 @@ function coerceTicket(v: unknown): PlanTicket | null {
   if (notes) ticket.notes = notes;
   const descHtml = str(t.descHtml, MAX_DESC_HTML)?.trim();
   if (descHtml) ticket.descHtml = descHtml;
-  const deadlineMs = numOrNull(t.deadlineMs, 0, MAX_EPOCH_MS);
-  if (deadlineMs !== null) ticket.deadlineMs = deadlineMs;
   const startMin = numOrNull(t.startMin, 0, 24 * 60 - 1);
   if (startMin !== null) ticket.startMin = Math.round(startMin);
   const durationMin = numOrNull(t.durationMin, 1, 24 * 60);
   if (durationMin !== null) ticket.durationMin = Math.round(durationMin);
+  // the task stopwatch (spentMs was once retired, then returned in v2.7)
+  const spentMs = numOrNull(t.spentMs, 0, MAX_SPAN_MS);
+  if (spentMs !== null && spentMs > 0) ticket.spentMs = spentMs;
+  const inProgressSince = numOrNull(t.inProgressSince, 0, MAX_EPOCH_MS);
+  if (inProgressSince !== null) ticket.inProgressSince = inProgressSince;
   return ticket;
 }
 
@@ -301,6 +339,69 @@ function coercePlan(v: unknown): PlanState {
   return { tickets };
 }
 
+function coerceDen(v: unknown, base: DenConfig): DenConfig {
+  const obj = (v ?? {}) as Partial<Record<DenPart, unknown>>;
+  const out = { ...base };
+  for (const part of DEN_PARTS) {
+    const val = obj[part];
+    if (typeof val === 'string' && (DEN_OPTIONS[part] as readonly string[]).includes(val)) {
+      (out as Record<DenPart, string>)[part] = val;
+    }
+  }
+  return out;
+}
+
+function coerceCharacter(v: unknown, base: CharacterConfig): CharacterConfig {
+  const obj = (v ?? {}) as Partial<Record<keyof CharacterConfig, unknown>>;
+  return {
+    body: enumOf<BodyId>(obj.body, BODY_IDS, base.body),
+    shirt: enumOf<ShirtId>(obj.shirt, SHIRT_IDS, base.shirt),
+  };
+}
+
+const MAX_PLACEMENTS = 60;
+
+/** Placements survive only for known movable items, clamped into their zone. */
+function coercePlacements(
+  v: unknown,
+  den: DenConfig,
+  owned: Record<string, boolean>,
+): Record<string, Placement> {
+  const out: Record<string, Placement> = {};
+  let n = 0;
+  let cat: Placement | null = null;
+  for (const [key, val] of safeEntries(v)) {
+    if (n >= MAX_PLACEMENTS) break;
+    const item = getItem(key);
+    if (!item?.surface || !val || typeof val !== 'object') continue;
+    const p = val as Partial<Placement>;
+    const x = numOrNull(p.x, -160, 320);
+    const y = numOrNull(p.y, -144, 288);
+    if (x === null || y === null) continue;
+    if (key === 'room_cat') {
+      // clamped LAST — the cat's perches depend on the coerced shelf spot
+      cat = { x, y };
+      n += 1;
+      continue;
+    }
+    const clamped = clampPlacement(item, x, y);
+    if (!clamped) continue;
+    out[key] = clamped;
+    n += 1;
+  }
+  if (cat) {
+    const item = getItem('room_cat');
+    const shelf = getItem('room_bookshelf');
+    const ctx: PerchCtx = {
+      windowId: den.window,
+      shelfAt: owned.room_bookshelf ? (out.room_bookshelf ?? shelf?.anchor ?? null) : null,
+    };
+    const clamped = item ? clampPlacement(item, cat.x, cat.y, ctx) : null;
+    if (clamped) out.room_cat = clamped;
+  }
+  return out;
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 /**
@@ -316,10 +417,14 @@ export function coerceState(raw: unknown): State | null {
   // Only known versions are accepted; anything else is rejected.
   if (obj.v !== 1 && obj.v !== 2) return null;
 
+  // placements need the coerced den + owned (the cat's perch context)
+  const owned = coerceOwned(obj.owned);
+  const den = coerceDen(obj.den, base.den);
+
   return {
     v: 2,
     points: int(obj.points, base.points, 0, MAX_POINTS),
-    owned: coerceOwned(obj.owned),
+    owned,
     equipped: coerceEquipped(obj.equipped),
     perks: coercePerks(obj.perks, base.perks),
     settings: coerceSettings(obj.settings, base.settings),
@@ -327,5 +432,8 @@ export function coerceState(raw: unknown): State | null {
     week: coerceWeek(obj.week, base.week),
     history: coerceHistory(obj.history),
     plan: coercePlan(obj.plan),
+    den,
+    character: coerceCharacter(obj.character, base.character),
+    placements: coercePlacements(obj.placements, den, owned),
   };
 }

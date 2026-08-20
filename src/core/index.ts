@@ -9,6 +9,7 @@ export * from './format';
 export * from './points';
 export * from './week';
 export * from './items';
+export * from './den';
 export * from './plan';
 export * from './shift';
 export * from './coerce';

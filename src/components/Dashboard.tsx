@@ -25,10 +25,8 @@ import {
   DASH_WIDGET_IDS,
   dateString,
   dayIndexMonSat,
-  DEFAULT_DASH_WIDGETS,
   earnedPreview,
   effectiveGrace,
-  fmtDeadline,
   formatClock,
   formatDateLabel,
   formatHM,
@@ -38,17 +36,17 @@ import {
   isActive,
   isBreakConsumed,
   isBreakKey,
-  isTicketOverdue,
   liveAcc,
   liveBreakUsed,
   pad2,
   shiftProgress,
   sortDayTickets,
-  SOUNDSCAPE_LABELS,
   TICKET_STATUS_LABELS,
   ticketsFor,
   weekKey,
   type BreakKey,
+  type DashCol,
+  type DashSize,
   type DashWidgetId,
   type PlanTicket,
   type State,
@@ -59,6 +57,7 @@ import { isTauri } from '../state/desktop';
 import { play } from '../audio';
 import { RoomScene } from '../room/RoomScene';
 import { MediaCard } from './MediaCard';
+import { SoundscapeCard } from './SoundscapeCard';
 import { STATUS_META } from './statusMeta';
 import { useArmedConfirm } from './useArmedConfirm';
 import { useEscape } from './useEscape';
@@ -81,13 +80,13 @@ const WIDGET_META: Record<
   focus: { label: 'Focus timer', icon: '⏱', side: false },
   plan: { label: 'Today’s plan', icon: '🗓', side: false },
   breathers: { label: 'Breathers', icon: '🌿', side: false, activeOnly: true },
-  wins: { label: 'Wins', icon: '✔', side: false, activeOnly: true },
   points: { label: 'Points', icon: '◈', side: true },
   week: { label: 'This week', icon: '🔥', side: true },
   den: { label: 'Your den', icon: '🛋', side: true },
   clock: { label: 'Clock', icon: '🕰', side: true },
   note: { label: 'Sticky note', icon: '📝', side: true },
   media: { label: 'Now playing', icon: '🎧', side: true, desktopOnly: true },
+  soundscape: { label: 'Soundscape', icon: '🎶', side: true },
 };
 
 export interface DashboardProps {
@@ -100,26 +99,56 @@ export interface DashboardProps {
 export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps) {
   const [editing, setEditing] = useState(false);
   useEscape(() => setEditing(false), editing);
-  const widgets = state.settings.dashWidgets;
+  const { settings } = state;
+  const widgets = settings.dashWidgets;
   const active = isActive(state.shift.status);
+  const dockMode = settings.focusTimer === 'dock';
+
+  // Whether the media session has anything to show — when it doesn't, the
+  // Now-playing card quietly sinks to the bottom of its column (not while
+  // editing, so arranging stays stable).
+  const [mediaActive, setMediaActive] = useState(false);
+
+  const colOf = (id: DashWidgetId): DashCol =>
+    settings.dashCols[id] ?? (WIDGET_META[id].side ? 'side' : 'main');
+  const sizeOf = (id: DashWidgetId): DashSize => settings.dashSizes[id] ?? 'lg';
 
   // Desktop-only widgets (Now playing) don't exist on the web at all; cards
   // that only make sense mid-shift vanish while idle — except in edit mode,
-  // where a placeholder keeps them arrangeable.
+  // where a placeholder keeps them arrangeable. In dock mode the focus timer
+  // lives in the corner dock instead of the grid.
   const available = (id: DashWidgetId) => !WIDGET_META[id].desktopOnly || isTauri();
   const visible = widgets.filter(
-    (id) => available(id) && (editing || active || !WIDGET_META[id].activeOnly),
+    (id) =>
+      available(id) &&
+      !(dockMode && id === 'focus') &&
+      (editing || active || !WIDGET_META[id].activeOnly),
   );
-  const hidden = DASH_WIDGET_IDS.filter((id) => available(id) && !widgets.includes(id));
-  const mainIds = visible.filter((id) => !WIDGET_META[id].side);
-  const sideIds = visible.filter((id) => WIDGET_META[id].side);
+  const hidden = DASH_WIDGET_IDS.filter(
+    (id) => available(id) && !widgets.includes(id) && !(dockMode && id === 'focus'),
+  );
+
+  function columnIds(col: DashCol): DashWidgetId[] {
+    const ids = visible.filter((id) => colOf(id) === col);
+    if (editing || mediaActive) return ids;
+    // idle media sinks to the bottom of whichever column it's in
+    const i = ids.indexOf('media');
+    if (i < 0 || i === ids.length - 1) return ids;
+    const out = ids.slice();
+    out.splice(i, 1);
+    out.push('media');
+    return out;
+  }
+  const mainIds = columnIds('main');
+  const sideIds = columnIds('side');
 
   // Layout mutations read the store directly (not the render-time `widgets`)
   // so rapid clicks in one frame can't act on a stale list.
   function move(id: DashWidgetId, dir: -1 | 1) {
-    const list = [...store.getState().settings.dashWidgets];
-    const side = WIDGET_META[id].side;
-    const peers = list.filter((w) => WIDGET_META[w].side === side);
+    const s = store.getState().settings;
+    const list = [...s.dashWidgets];
+    const col = s.dashCols[id] ?? (WIDGET_META[id].side ? 'side' : 'main');
+    const peers = list.filter((w) => (s.dashCols[w] ?? (WIDGET_META[w].side ? 'side' : 'main')) === col);
     const target = peers[peers.indexOf(id) + dir];
     if (!target) return;
     const i = list.indexOf(id);
@@ -136,50 +165,62 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
     store.setDashWidgets([...store.getState().settings.dashWidgets, id]);
   }
 
-  function renderBody(id: DashWidgetId) {
+  function renderBody(id: DashWidgetId, size: DashSize, col: DashCol) {
     if (WIDGET_META[id].activeOnly && !active) {
       return <SleepingCard label={WIDGET_META[id].label} />;
     }
     switch (id) {
       case 'focus':
-        return <FocusHero state={state} now={now} />;
+        return <FocusHero state={state} now={now} compact />;
       case 'plan':
         return <TodayPlanCard state={state} now={now} onOpenPlanner={onGoToPlan} />;
       case 'breathers':
         return <BreathersCard state={state} now={now} />;
-      case 'wins':
-        return <TaskLog shift={state.shift} />;
       case 'points':
         return <PointsCard state={state} now={now} />;
       case 'week':
         return <WeekCard state={state} now={now} />;
       case 'den':
-        return <DenCard state={state} onGoToRoom={onGoToRoom} />;
+        return (
+          <DenCard
+            state={state}
+            onGoToRoom={onGoToRoom}
+            sceneWidth={col === 'main' ? (size === 'sm' ? 260 : 380) : size === 'sm' ? 190 : 260}
+            compact={size === 'sm'}
+          />
+        );
       case 'clock':
         return <ClockCard now={now} />;
       case 'note':
         return <NoteCard note={state.settings.dashNote} />;
       case 'media':
-        return <MediaCard />;
+        return <MediaCard onActiveChange={setMediaActive} />;
+      case 'soundscape':
+        return <SoundscapeCard state={state} />;
     }
   }
 
   function renderWidget(id: DashWidgetId) {
-    const side = WIDGET_META[id].side;
-    const peers = widgets.filter((w) => WIDGET_META[w].side === side);
+    const col = colOf(id);
+    const size = sizeOf(id);
+    const peers = widgets.filter((w) => visible.includes(w) && colOf(w) === col);
     const pi = peers.indexOf(id);
+    const label = WIDGET_META[id].label;
     return (
-      <div key={id} className={`dash-widget ${editing ? 'is-editing' : ''}`}>
+      <div
+        key={id}
+        className={`dash-widget ${editing ? 'is-editing' : ''} ${size === 'sm' ? 'dash-sm' : ''}`}
+      >
         {editing && (
           <div className="dash-widget-bar">
             <span className="dash-widget-name">
-              <span aria-hidden="true">{WIDGET_META[id].icon}</span> {WIDGET_META[id].label}
+              <span aria-hidden="true">{WIDGET_META[id].icon}</span> {label}
             </span>
             <span className="dash-widget-tools">
               <button
                 type="button"
                 disabled={pi <= 0}
-                aria-label={`Move ${WIDGET_META[id].label} up`}
+                aria-label={`Move ${label} up`}
                 title="Move up"
                 data-sound="none"
                 onClick={() => move(id, -1)}
@@ -189,17 +230,37 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
               <button
                 type="button"
                 disabled={pi === peers.length - 1}
-                aria-label={`Move ${WIDGET_META[id].label} down`}
+                aria-label={`Move ${label} down`}
                 title="Move down"
                 data-sound="none"
                 onClick={() => move(id, 1)}
               >
                 ↓
               </button>
+              <button
+                type="button"
+                aria-label={
+                  col === 'main' ? `Move ${label} to the side rail` : `Move ${label} to the main column`
+                }
+                title={col === 'main' ? 'Move to the side rail' : 'Move to the main column'}
+                data-sound="none"
+                onClick={() => store.setDashCol(id, col === 'main' ? 'side' : 'main')}
+              >
+                {col === 'main' ? '▸' : '◂'}
+              </button>
+              <button
+                type="button"
+                aria-label={size === 'lg' ? `Smaller ${label}` : `Larger ${label}`}
+                title={size === 'lg' ? 'Smaller view' : 'Larger view'}
+                data-sound="none"
+                onClick={() => store.setDashSize(id, size === 'lg' ? 'sm' : 'lg')}
+              >
+                {size === 'lg' ? '⊟' : '⊞'}
+              </button>
               {id !== 'focus' && (
                 <button
                   type="button"
-                  aria-label={`Hide ${WIDGET_META[id].label}`}
+                  aria-label={`Hide ${label}`}
                   title="Hide"
                   data-sound="none"
                   onClick={() => hide(id)}
@@ -210,7 +271,7 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
             </span>
           </div>
         )}
-        <div className="dash-widget-body">{renderBody(id)}</div>
+        <div className="dash-widget-body">{renderBody(id, size, col)}</div>
       </div>
     );
   }
@@ -223,11 +284,7 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
             <span className="muted dash-toolbar-hint">
               Arrange your Today page — move, hide, or add cards.
             </span>
-            <button
-              className="btn btn-sm"
-              data-sound="none"
-              onClick={() => store.setDashWidgets([...DEFAULT_DASH_WIDGETS])}
-            >
+            <button className="btn btn-sm" data-sound="none" onClick={() => store.resetDash()}>
               Reset layout
             </button>
             <button className="btn btn-sm btn-primary" onClick={() => setEditing(false)}>
@@ -270,6 +327,54 @@ export function Dashboard({ state, now, onGoToRoom, onGoToPlan }: DashboardProps
   );
 }
 
+// ── Focus dock: the timer as a collapsible bottom-left corner pill ───────────
+//
+// Rendered by App.tsx as a SIBLING of <main> (like the other fixed overlays):
+// the screen-entrance animation leaves a transform on <main>, which would
+// otherwise become the containing block and pin the dock to the page instead
+// of the viewport.
+
+export function FocusDock({ state, now }: { state: State; now: number }) {
+  const [open, setOpen] = useState(false);
+  useEscape(() => setOpen(false), open);
+  const { shift } = state;
+  const active = isActive(shift.status);
+  const meta = STATUS_META[shift.status];
+  const stint = shift.statusStart != null ? Math.max(0, now - shift.statusStart) : 0;
+  const ready = !active && canClockIn(state, now);
+
+  return (
+    <div className={`focus-dock ${open ? 'is-open' : ''}`}>
+      {open && (
+        <div className="focus-dock-panel">
+          <FocusHero state={state} now={now} compact />
+        </div>
+      )}
+      <button
+        type="button"
+        className={`focus-dock-pill ${active ? `tone-${meta.tone}` : ''}`}
+        aria-expanded={open}
+        aria-label={open ? 'Collapse the focus timer' : 'Expand the focus timer'}
+        data-sound="none"
+        onClick={() => setOpen(!open)}
+      >
+        {active ? (
+          <>
+            <span className="status-dot" aria-hidden="true" />
+            <span className="focus-dock-label">{meta.label}</span>
+            <span className="focus-dock-time mono">{formatHMS(stint)}</span>
+          </>
+        ) : (
+          <span className="focus-dock-label">{ready ? '⏱ Settle in' : '🌙 Day complete'}</span>
+        )}
+        <span className="focus-dock-chevron" aria-hidden="true">
+          {open ? '▾' : '▴'}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 /** Edit-mode stand-in for cards that only appear during an active shift. */
 function SleepingCard({ label }: { label: string }) {
   return (
@@ -281,10 +386,23 @@ function SleepingCard({ label }: { label: string }) {
 
 // ── Focus hero: settle in / live shift / done ────────────────────────────────
 
-function FocusHero({ state, now }: { state: State; now: number }) {
-  if (isActive(state.shift.status)) return <StatusCard state={state} now={now} />;
-  if (canClockIn(state, now)) return <ReadyCard balance={state.points} />;
-  return <DoneCard state={state} />;
+function FocusHero({
+  state,
+  now,
+  compact = false,
+}: {
+  state: State;
+  now: number;
+  compact?: boolean;
+}) {
+  const body = isActive(state.shift.status) ? (
+    <StatusCard state={state} now={now} />
+  ) : canClockIn(state, now) ? (
+    <ReadyCard balance={state.points} />
+  ) : (
+    <DoneCard state={state} />
+  );
+  return compact ? <div className="focus-compact">{body}</div> : body;
 }
 
 function ReadyCard({ balance }: { balance: number }) {
@@ -339,6 +457,16 @@ function DoneCard({ state }: { state: State }) {
       <p className="muted balance-line">
         Balance: <strong className="mono tone-points">{state.points}</strong> pts
       </p>
+      <div className="notired">
+        <span className="muted">Not tired?</span>
+        <button
+          className="btn btn-sm"
+          data-sound="start"
+          onClick={() => store.resumeDay(Date.now())}
+        >
+          Settle back in
+        </button>
+      </div>
     </section>
   );
 }
@@ -474,26 +602,16 @@ function StatusCard({ state, now }: { state: State; now: number }) {
         {endArmed ? 'Really wrap up? This locks in today’s points.' : 'Wrap up the day'}
       </button>
 
-      <div className="focus-tools">
-        {state.perks.deepWork && (
+      {/* Soundscape moved to its own widget — only the deep-work shortcut stays. */}
+      {state.perks.deepWork && (
+        <div className="focus-tools">
           <button className="btn btn-sm" onClick={() => store.setDeepWork(true)}>
             ◎ Deep work
           </button>
-        )}
-        <button
-          className={`btn btn-sm ${state.settings.soundscapeOn ? 'btn-primary' : ''}`}
-          aria-pressed={state.settings.soundscapeOn}
-          onClick={() => store.setSoundscapeOn(!state.settings.soundscapeOn)}
-        >
-          ♪ {state.settings.soundscapeOn ? `${soundscapeName(state)} on` : 'Soundscape'}
-        </button>
-      </div>
+        </div>
+      )}
     </section>
   );
-}
-
-function soundscapeName(state: State): string {
-  return SOUNDSCAPE_LABELS[state.settings.soundscape];
 }
 
 // ── Breathers ────────────────────────────────────────────────────────────────
@@ -622,17 +740,36 @@ function WeekCard({ state, now }: { state: State; now: number }) {
   );
 }
 
-function DenCard({ state, onGoToRoom }: { state: State; onGoToRoom: () => void }) {
+function DenCard({
+  state,
+  onGoToRoom,
+  sceneWidth = 260,
+  compact = false,
+}: {
+  state: State;
+  onGoToRoom: () => void;
+  sceneWidth?: number;
+  compact?: boolean;
+}) {
   return (
     <section className="card room-preview-card">
       <div className="card-head">
         <h2>Your den</h2>
-        <button className="btn btn-ghost btn-sm" onClick={onGoToRoom}>
-          Open ›
-        </button>
+        {!compact && (
+          <button className="btn btn-ghost btn-sm" onClick={onGoToRoom}>
+            Open ›
+          </button>
+        )}
       </div>
       <button className="room-preview-btn" onClick={onGoToRoom} aria-label="Open your room">
-        <RoomScene owned={state.owned} equipped={state.equipped} width={260} />
+        <RoomScene
+          owned={state.owned}
+          equipped={state.equipped}
+          den={state.den}
+          character={state.character}
+          placements={state.placements}
+          width={sceneWidth}
+        />
       </button>
     </section>
   );
@@ -735,7 +872,7 @@ function TodayPlanCard({
       ) : (
         <ul className="tplan-list">
           {tickets.map((t) => (
-            <TodayTicketRow key={t.id} ticket={t} todayKey={todayKey} now={now} />
+            <TodayTicketRow key={t.id} ticket={t} todayKey={todayKey} />
           ))}
         </ul>
       )}
@@ -787,17 +924,8 @@ function QuickAdd({ dateKey }: { dateKey: string }) {
   );
 }
 
-function TodayTicketRow({
-  ticket,
-  todayKey,
-  now,
-}: {
-  ticket: PlanTicket;
-  todayKey: string;
-  now: number;
-}) {
+function TodayTicketRow({ ticket, todayKey }: { ticket: PlanTicket; todayKey: string }) {
   const done = ticket.status === 'done';
-  const overdue = isTicketOverdue(ticket, now);
   return (
     <li className={`tplan-item prio-${ticket.priority} ${done ? 'is-done' : ''}`}>
       <button
@@ -818,11 +946,6 @@ function TodayTicketRow({
         {ticket.startMin != null && (
           <span className="meta-chip mono" title="Scheduled slot">
             ◷ {formatSlotTime(ticket.startMin)}
-          </span>
-        )}
-        {ticket.deadlineMs != null && (
-          <span className={`meta-chip mono ${overdue ? 'is-over' : ''}`} title="Deadline">
-            ⚑ {fmtDeadline(ticket.deadlineMs, todayKey)}
           </span>
         )}
       </span>
@@ -936,122 +1059,3 @@ function TodayReport({
   );
 }
 
-// ── Wins (the during-day task log) ───────────────────────────────────────────
-
-function TaskLog({ shift }: { shift: State['shift'] }) {
-  const [text, setText] = useState('');
-  const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [editText, setEditText] = useState('');
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!text.trim()) return;
-    store.addTask(text, Date.now());
-    play('task'); // covers both Enter and the Add button
-    setText('');
-  }
-
-  function startEdit(index: number, current: string) {
-    setEditIndex(index);
-    setEditText(current);
-  }
-
-  function saveEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (editIndex == null) return;
-    store.editTask(editIndex, editText);
-    setEditIndex(null);
-  }
-
-  function remove(index: number) {
-    store.deleteTask(index);
-    if (editIndex === index) setEditIndex(null);
-  }
-
-  // Newest first, but keep the real index for edit/delete.
-  const ordered = shift.tasks.map((t, i) => ({ t, i })).reverse();
-
-  return (
-    <section className="card tasks-card">
-      <div className="card-head">
-        <h2>Wins</h2>
-        <span className="muted">
-          {shift.tasks.length} logged{shift.tasks.length < 3 ? ` · +20 at 3` : ' · +20 ✓'}
-        </span>
-      </div>
-      <form className="task-form" onSubmit={submit}>
-        <input
-          className="input"
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="What did you just finish?"
-          aria-label="Log a win"
-          maxLength={120}
-        />
-        <button className="btn btn-primary" type="submit" disabled={!text.trim()} data-sound="none">
-          Add
-        </button>
-      </form>
-      {shift.tasks.length === 0 ? (
-        <p className="muted empty">Nothing yet — log a win, however small.</p>
-      ) : (
-        <ul className="task-list">
-          {ordered.map(({ t, i }) =>
-            editIndex === i ? (
-              <li key={i}>
-                <form className="task-edit-form" onSubmit={saveEdit}>
-                  <input
-                    className="input"
-                    type="text"
-                    value={editText}
-                    onChange={(e) => setEditText(e.target.value)}
-                    aria-label="Edit win"
-                    maxLength={120}
-                    autoFocus
-                  />
-                  <button className="btn btn-sm btn-primary" type="submit" data-sound="none">
-                    Save
-                  </button>
-                  <button
-                    className="btn btn-sm"
-                    type="button"
-                    data-sound="none"
-                    onClick={() => setEditIndex(null)}
-                  >
-                    ✕
-                  </button>
-                </form>
-              </li>
-            ) : (
-              <li key={i}>
-                <span className="task-time mono">{formatClock(t.time)}</span>
-                <span className="task-text">{t.text}</span>
-                <span className="task-actions">
-                  <button
-                    type="button"
-                    data-sound="none"
-                    aria-label="Edit win"
-                    title="Edit"
-                    onClick={() => startEdit(i, t.text)}
-                  >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    data-sound="none"
-                    aria-label="Delete win"
-                    title="Delete"
-                    onClick={() => remove(i)}
-                  >
-                    🗑
-                  </button>
-                </span>
-              </li>
-            ),
-          )}
-        </ul>
-      )}
-    </section>
-  );
-}

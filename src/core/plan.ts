@@ -9,7 +9,7 @@
  */
 
 import { addDays } from './dates';
-import type { PlanState, PlanTicket } from './types';
+import type { PlanState, PlanTicket, TicketStatus } from './types';
 
 export function freshPlan(): PlanState {
   return { tickets: {} };
@@ -25,11 +25,6 @@ export function sortDayTickets(list: PlanTicket[]): PlanTicket[] {
   return [...list].sort(
     (a, b) => (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER),
   );
-}
-
-/** Past its deadline and still not done. */
-export function isTicketOverdue(t: PlanTicket, now: number): boolean {
-  return t.deadlineMs != null && t.deadlineMs < now && t.status !== 'done';
 }
 
 /** Current or future days are editable; past days are locked. */
@@ -55,9 +50,41 @@ export function addTicket(
 export type TicketPatch = Partial<
   Pick<
     PlanTicket,
-    'title' | 'notes' | 'descHtml' | 'deadlineMs' | 'status' | 'priority' | 'durationMin' | 'startMin'
+    | 'title'
+    | 'notes'
+    | 'descHtml'
+    | 'status'
+    | 'priority'
+    | 'durationMin'
+    | 'startMin'
+    | 'spentMs'
+    | 'inProgressSince'
   >
 >;
+
+/**
+ * The task stopwatch: build the patch for a status change. Entering
+ * In progress starts the clock; leaving it (done, blocked, back to to-do)
+ * banks the elapsed stint into `spentMs`. Accumulates across stints.
+ */
+export function statusPatch(t: PlanTicket, status: TicketStatus, now: number): TicketPatch {
+  const patch: TicketPatch = { status };
+  if (status === 'in_progress') {
+    if (t.status !== 'in_progress' || t.inProgressSince == null) patch.inProgressSince = now;
+  } else if (t.status === 'in_progress' && t.inProgressSince != null) {
+    patch.spentMs = (t.spentMs ?? 0) + Math.max(0, now - t.inProgressSince);
+    patch.inProgressSince = undefined;
+  }
+  return patch;
+}
+
+/** Tracked time incl. the live stint while the ticket is In progress. */
+export function liveSpentMs(t: PlanTicket, now: number): number {
+  const base = t.spentMs ?? 0;
+  return t.status === 'in_progress' && t.inProgressSince != null
+    ? base + Math.max(0, now - t.inProgressSince)
+    : base;
+}
 
 /** Patch a ticket in place (no-op on locked days / unknown id). */
 export function updateTicket(

@@ -93,7 +93,6 @@ export interface PlanTicket {
    */
   descHtml?: string;
   /** optional due date+time, epoch ms */
-  deadlineMs?: number;
   status: TicketStatus;
   priority: TicketPriority;
   /**
@@ -104,7 +103,55 @@ export interface PlanTicket {
   startMin?: number;
   /** slot length in minutes (a reminder of the planned window, not a timer) */
   durationMin?: number;
+  /** accumulated In-progress time (ms) — the task stopwatch, shown in Stats */
+  spentMs?: number;
+  /** epoch when the ticket last entered In progress; cleared on leaving */
+  inProgressSince?: number;
   createdAt: number;
+}
+
+// ── Den personalization ──────────────────────────────────────────────────────
+// All ids are persisted — never rename one, add new ids instead.
+
+export type DeskId = 'desk_classic' | 'desk_walnut' | 'desk_white' | 'desk_industrial' | 'desk_standing';
+export type WindowId = 'window_classic' | 'window_round' | 'window_arch' | 'window_wide' | 'window_garden';
+export type ComputerId = 'computer_desktop' | 'computer_laptop' | 'computer_ultrawide' | 'computer_allinone' | 'computer_retro';
+export type DrawersId = 'drawers_classic' | 'drawers_tall' | 'drawers_shelves' | 'drawers_minimal';
+export type ChairId = 'chair_office' | 'chair_gaming' | 'chair_armchair' | 'chair_stool' | 'chair_beanbag';
+export type FloorId = 'floor_planks' | 'floor_herringbone' | 'floor_checker' | 'floor_carpet' | 'floor_stone';
+export type WallpaperId = 'wall_plain' | 'wall_striped' | 'wall_stars' | 'wall_wainscot' | 'wall_brick';
+
+/** The free base furniture every den is built from (chosen in the creator). */
+export interface DenConfig {
+  desk: DeskId;
+  window: WindowId;
+  computer: ComputerId;
+  drawers: DrawersId;
+  chair: ChairId;
+  floor: FloorId;
+  wallpaper: WallpaperId;
+}
+
+export type DenPart = keyof DenConfig;
+
+/** Light body presets — both share the outfit/hair/accessory systems. */
+export type BodyId = 'masc' | 'fem';
+
+/** Free starter shirts — the base clothing worn when no outfit is equipped. */
+export type ShirtId = 'shirt_tan' | 'shirt_green' | 'shirt_blue' | 'shirt_rose' | 'shirt_slate';
+
+export interface CharacterConfig {
+  body: BodyId;
+  shirt: ShirtId;
+}
+
+/** Where a movable item may live in the scene. */
+export type Surface = 'desk' | 'floor' | 'wall';
+
+/** Anchor position of a placed item (scene coords, its art's top-left). */
+export interface Placement {
+  x: number;
+  y: number;
 }
 
 /** Day planner: tickets keyed by YYYY-MM-DD. */
@@ -146,13 +193,13 @@ export type DashWidgetId =
   | 'focus'
   | 'plan'
   | 'breathers'
-  | 'wins'
   | 'points'
   | 'week'
   | 'den'
   | 'clock'
   | 'note'
-  | 'media';
+  | 'media'
+  | 'soundscape';
 export type SoundscapeId =
   | 'rain'
   | 'cafe'
@@ -161,6 +208,13 @@ export type SoundscapeId =
   | 'forest'
   | 'waves'
   | 'wind';
+
+/** Which Today-page column a widget lives in. */
+export type DashCol = 'main' | 'side';
+/** How a Today-page widget renders: full ('lg') or compact ('sm'). */
+export type DashSize = 'lg' | 'sm';
+/** Focus timer style: floating collapsible dock or a compact card in the grid. */
+export type FocusTimerMode = 'dock' | 'card';
 
 /** User-facing preferences (persisted alongside game state). */
 export interface Settings {
@@ -179,8 +233,19 @@ export interface Settings {
   onboarded: boolean;
   /** Today-page widgets, in display order; presence = enabled ('focus' always present) */
   dashWidgets: DashWidgetId[];
+  /** per-widget column overrides; missing → the widget's default column */
+  dashCols: Partial<Record<DashWidgetId, DashCol>>;
+  /** per-widget size overrides; missing → 'lg' */
+  dashSizes: Partial<Record<DashWidgetId, DashSize>>;
+  /** how the focus timer renders on Today ('dock' = bottom-left collapsible) */
+  focusTimer: FocusTimerMode;
   /** free-text contents of the Today-page note widget */
   dashNote: string;
+  /**
+   * First-run den creator completed (or skipped). The creator additionally
+   * requires a pristine state, so existing dens never see it.
+   */
+  denSetUp: boolean;
 }
 
 /** The single, versioned, persisted state object. */
@@ -196,6 +261,11 @@ export interface State {
   week: WeekState;
   history: HistoryEntry[];
   plan: PlanState;
+  /** free base furniture (defaults reproduce the classic den) */
+  den: DenConfig;
+  character: CharacterConfig;
+  /** movable items the user has repositioned; absent = the item's default anchor */
+  placements: Record<string, Placement>;
 }
 
 /** Shop item categories. */
@@ -222,6 +292,12 @@ export interface Item {
   consumable?: boolean;
   /** phase-2 seam: visible but not yet functional */
   comingSoon?: boolean;
+  /** movable scene props: which surface they live on… */
+  surface?: Surface;
+  /** …their default anchor (top-left, scene coords — today's drawn position) */
+  anchor?: Placement;
+  /** …and their art's bounding size, for zone clamping */
+  footprint?: { w: number; h: number };
 }
 
 /** Breakdown of points for a single shift (excludes the week-level bonus). */

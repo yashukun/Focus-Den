@@ -1,9 +1,34 @@
-# The pixel room (`src/room/RoomScene.tsx`, catalog in `src/core/items.ts`)
+# The pixel room (`src/room/`, catalog in `src/core/items.ts`)
 
-The den is drawn entirely in code — one SVG render function, no sprite
-assets. The same component powers the Home hero, the Dashboard "Your den"
-widget (width 260) and the big Room view (width 480); the viewBox is fixed
-**160×144** and consumers set only `width`.
+The den is drawn entirely in code — no sprite assets — and since v2.7 it is
+**data-driven**: `RoomScene.tsx` composes base furniture from `DenConfig`
+(`parts.tsx` — 34 free variants across desk/window/computer/drawers/chair/
+floor/wallpaper), the avatar from `CharacterConfig` (`character.tsx` — two
+body presets sharing every outfit, five starter shirts), and movable props
+(`props.tsx`) inside translate groups positioned by `state.placements`.
+The same component powers the Home hero, the Dashboard "Your den" widget
+(width 260) and the big Den view (width 480); the viewBox is fixed
+**160×144** and consumers set only `width`. `interactive` (arrange mode)
+adds `data-item` attributes to movable prop groups plus an invisible
+footprint-sized grab rect inside each — necessary because the full-scene
+overlays (night tint, vignette, glows) paint ABOVE the props and would win
+SVG hit-testing; arrange-mode CSS makes everything but `[data-item]`
+subtrees pointer-transparent. The drag layer itself
+lives in `RoomView.tsx` (see ui.md), which previews via a draft placements
+map and commits through `store.placeItem` on drop. `Prop` stays module-scope
+on purpose: an inline component would change identity per render and remount
+every prop's DOM subtree on each drag frame.
+
+Variant rules: `_classic` ids are the pre-v2.7 art verbatim; floor/wall
+patterns draw over the theme tokens so all four themes work untouched;
+computers export their screen glow geometry; chairs keep the seat line at
+y≈104. Depth with free placement: rug flat first, floor props standing at
+y≤118 behind the desk, deeper ones in front of the character, dual monitor
+behind the main computer, cat in front. The cat perches on desk, front
+floor, window sill or shelf top (nearest-perch snapping in core/den.ts) —
+its front-layer draw order works for all four, which is why its floor
+perch is limited to IN FRONT of the desk. **Art audit grid**: run dev and open
+`/?den-audit` — every variant, body, shirt and outfit-fit in one page.
 
 ## How it renders
 

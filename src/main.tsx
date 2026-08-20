@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { DenAudit } from './room/DenAudit';
 import { initDesktopMirror } from './state/desktop';
 import './styles.css';
 
@@ -14,8 +15,10 @@ if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
 // Desktop build: keep a durable copy of the den on disk (no-op on the web).
 void initDesktopMirror();
 
+// Dev-only art audit grid (see room/DenAudit.tsx): /?den-audit
+const denAudit =
+  import.meta.env.DEV && new URLSearchParams(window.location.search).has('den-audit');
+
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{denAudit ? <DenAudit /> : <App />}</StrictMode>,
 );

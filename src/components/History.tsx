@@ -80,8 +80,8 @@ export function History({ state, now }: HistoryProps) {
   return (
     <div className="history">
       <header className="jr-head jr-rise">
-        <h1>Journal</h1>
-        <p className="muted jr-sub">Every settled-in day, remembered.</p>
+        <h1>Statistics</h1>
+        <p className="muted jr-sub">Every settled-in day and finished task, remembered.</p>
       </header>
 
       {rows.length > 0 && <StatStrip rows={rows} />}
@@ -121,7 +121,9 @@ export function History({ state, now }: HistoryProps) {
         </section>
       )}
 
-      <section className="card jr-rise" style={{ animationDelay: '240ms' }}>
+      <TaskTimes state={state} />
+
+      <section className="card jr-rise" style={{ animationDelay: '300ms' }}>
         <div className="card-head">
           <h2>Day by day</h2>
           {rows.length > 0 && (
@@ -204,6 +206,64 @@ function StatStrip({ rows }: { rows: HistoryEntry[] }) {
         <span className="jr-stat-label">smooth days</span>
       </div>
     </div>
+  );
+}
+
+// ── Task times ───────────────────────────────────────────────────────────────
+// Finished tasks with tracked In-progress time (the stopwatch runs whenever a
+// ticket sits in "In progress" — see core/plan.ts statusPatch).
+
+const TASK_TIMES_PAGE = 8;
+
+function TaskTimes({ state }: { state: State }) {
+  const [shown, setShown] = useState(TASK_TIMES_PAGE);
+
+  const rows = Object.entries(state.plan.tickets)
+    .flatMap(([dateKey, list]) =>
+      list
+        .filter((t) => t.status === 'done' && (t.spentMs ?? 0) > 0)
+        .map((t) => ({ dateKey, title: t.title, spentMs: t.spentMs ?? 0, id: t.id })),
+    )
+    .sort((a, b) => (a.dateKey < b.dateKey ? 1 : a.dateKey > b.dateKey ? -1 : 0));
+
+  return (
+    <section className="card jr-rise" style={{ animationDelay: '240ms' }}>
+      <div className="card-head">
+        <h2>Task times</h2>
+        {rows.length > 0 && (
+          <span className="muted">
+            {rows.length} finished task{rows.length === 1 ? '' : 's'} timed
+          </span>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <p className="muted empty">
+          Flip a task to <strong>In progress</strong> and Focus Den times it — finished tasks land
+          here with how long they really took.
+        </p>
+      ) : (
+        <>
+          <ul className="jr-tasktimes">
+            {rows.slice(0, shown).map((r) => (
+              <li key={`${r.dateKey}-${r.id}`} className="jr-tasktime">
+                <span className="jr-tasktime-date mono">{shortDate(r.dateKey)}</span>
+                <span className="jr-tasktime-title">{r.title}</span>
+                <span className="jr-tasktime-spent mono tone-work">{formatHM(r.spentMs)}</span>
+              </li>
+            ))}
+          </ul>
+          {rows.length > shown && (
+            <button
+              className="btn btn-ghost btn-block jr-more"
+              data-sound="none"
+              onClick={() => setShown((n) => n + TASK_TIMES_PAGE * 2)}
+            >
+              Show earlier tasks ({rows.length - shown} more)
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

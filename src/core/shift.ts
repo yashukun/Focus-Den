@@ -14,6 +14,7 @@
 
 import { BREAK_KEYS, BREAK_LIMITS, DEFAULT_DASH_WIDGETS, GRACE_MS, SHIFT_MS } from './constants';
 import { dateString, dayIndexMonSat } from './dates';
+import { defaultCharacter, defaultDen } from './den';
 import { computePoints } from './points';
 import { alignWeek, isPerfectWeek } from './week';
 import { POINTS } from './constants';
@@ -65,7 +66,11 @@ export function defaultSettings() {
     deepWork: false,
     onboarded: false,
     dashWidgets: [...DEFAULT_DASH_WIDGETS],
+    dashCols: {},
+    dashSizes: {},
+    focusTimer: 'dock' as const,
     dashNote: '',
+    denSetUp: false,
   };
 }
 
@@ -81,6 +86,9 @@ export function defaultState(): State {
     week: { key: null, days: {}, perfectAwarded: false },
     history: [],
     plan: { tickets: {} },
+    den: defaultDen(),
+    character: defaultCharacter(),
+    placements: {},
   };
 }
 
@@ -182,6 +190,22 @@ export function shiftProgress(
  */
 export function canClockIn(state: State, now: number): boolean {
   return !isActive(state.shift.status) && state.shift.date !== dateString(now);
+}
+
+/**
+ * "Not tired?" — a wrapped-up day can be picked back up the same calendar
+ * day. The resumed session is a normal shift (fresh 12 h window, fresh
+ * breathers — trusted-circle rules); at finalize it MERGES into the day's
+ * existing history entry and earns worked-hour points only (the smooth-day
+ * and wins bonuses were already banked by the first session).
+ */
+export function canResumeDay(state: State, now: number): boolean {
+  return state.shift.status === 'ended' && state.shift.date === dateString(now);
+}
+
+/** Begin the resumed session. Caller must check `canResumeDay` first. */
+export function resumeDay(state: State, now: number): State {
+  return clockIn(state, now);
 }
 
 // ── Mutations (return new state) ────────────────────────────────────────────
@@ -342,7 +366,13 @@ export function finalizeShift(
   const taskCount = committed.tasks.length;
   const clean = committed.clean;
 
-  const points = computePoints({ workedMs: worked, clean, taskCount });
+  // A resumed session ("Not tired?") merges into the day's existing entry and
+  // must not double-bank the per-day bonuses.
+  const prior = state.history.find((h) => h.date === shift.date);
+  let points = computePoints({ workedMs: worked, clean, taskCount });
+  if (prior) {
+    points = { ...points, cleanBonus: 0, taskBonus: 0, subtotal: points.workedPoints };
+  }
 
   // Attribute the shift to its clock-in day/week (not `now`, which for an
   // auto-end is the window's close and could differ).
@@ -368,16 +398,31 @@ export function finalizeShift(
     statusStart: null,
   };
 
-  const historyEntry = {
-    date: shift.date,
-    worked,
-    offline,
-    breaks: breakMs.break1 + breakMs.break2 + breakMs.lunch,
-    breaksByKey: breakMs,
-    tasks: taskCount,
-    points: totalPoints,
-    clean,
-  };
+  const historyEntry = prior
+    ? {
+        date: shift.date,
+        worked: prior.worked + worked,
+        offline: prior.offline + offline,
+        breaks: prior.breaks + breakMs.break1 + breakMs.break2 + breakMs.lunch,
+        breaksByKey: {
+          break1: (prior.breaksByKey?.break1 ?? 0) + breakMs.break1,
+          break2: (prior.breaksByKey?.break2 ?? 0) + breakMs.break2,
+          lunch: (prior.breaksByKey?.lunch ?? 0) + breakMs.lunch,
+        },
+        tasks: prior.tasks + taskCount,
+        points: prior.points + totalPoints,
+        clean: prior.clean && clean,
+      }
+    : {
+        date: shift.date,
+        worked,
+        offline,
+        breaks: breakMs.break1 + breakMs.break2 + breakMs.lunch,
+        breaksByKey: breakMs,
+        tasks: taskCount,
+        points: totalPoints,
+        clean,
+      };
 
   const summary: ShiftSummary = {
     date: shift.date,
@@ -398,7 +443,9 @@ export function finalizeShift(
       points: newBalance,
       shift: endedShift,
       week: nextWeek,
-      history: [...state.history, historyEntry],
+      history: prior
+        ? state.history.map((h) => (h === prior ? historyEntry : h))
+        : [...state.history, historyEntry],
     },
     summary,
   };

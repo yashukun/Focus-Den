@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   addTask,
+  canResumeDay,
   applyBreakGrace,
   applyStreakFreeze,
   BREAK_LIMITS,
@@ -23,6 +24,7 @@ import {
   isBreakConsumed,
   liveAcc,
   MINUTE_MS,
+  resumeDay,
   shouldAutoEnd,
   switchStatus,
   weekKey,
@@ -220,6 +222,44 @@ describe('finalize: clock-out', () => {
     const { summary } = finalizeShift({ ...defaultState(), shift: over }, MON + 8 * HOUR_MS);
     expect(summary!.clean).toBe(false);
     expect(summary!.points.cleanBonus).toBe(0);
+  });
+});
+
+describe('"Not tired?" — resuming a wrapped-up day', () => {
+  it('allows same-day resume only after a wrap-up, never across days', () => {
+    const ended = finalizeShift(clockedIn(), MON + 8 * HOUR_MS).state;
+    expect(canResumeDay(ended, MON + 9 * HOUR_MS)).toBe(true);
+    expect(canResumeDay(ended, MON + 24 * HOUR_MS)).toBe(false); // Tuesday
+    expect(canResumeDay(clockedIn(), MON + HOUR_MS)).toBe(false); // still running
+    expect(canResumeDay(defaultState(), MON)).toBe(false); // never clocked in
+  });
+
+  it('merges the resumed session into the day and pays worked points only', () => {
+    let s = clockedIn();
+    s = { ...s, shift: addTask(s.shift, 'x', MON) };
+    s = { ...s, shift: addTask(s.shift, 'y', MON) };
+    s = { ...s, shift: addTask(s.shift, 'z', MON) };
+    const first = finalizeShift(s, MON + 8 * HOUR_MS).state; // 80 + 50 + 20
+
+    const resumedAt = MON + 9 * HOUR_MS;
+    let r = resumeDay(first, resumedAt);
+    r = { ...r, shift: addTask(r.shift, 'extra', resumedAt) };
+    const { state: second, summary } = finalizeShift(r, resumedAt + 2 * HOUR_MS);
+
+    // Session summary: 2h worked = 20 pts; no repeat clean/task bonuses.
+    expect(summary!.points.workedPoints).toBe(20);
+    expect(summary!.points.cleanBonus).toBe(0);
+    expect(summary!.points.taskBonus).toBe(0);
+
+    // One merged history entry for the day, everything summed.
+    expect(second.history).toHaveLength(1);
+    const day = second.history[0];
+    expect(day.date).toBe('2026-01-05');
+    expect(day.worked).toBe(10 * HOUR_MS);
+    expect(day.tasks).toBe(4);
+    expect(day.points).toBe(150 + 20);
+    expect(second.points).toBe(170);
+    expect(second.week.days[0]).toBe(true);
   });
 });
 

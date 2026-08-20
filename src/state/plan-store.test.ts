@@ -43,18 +43,15 @@ describe('store: adding intentions', () => {
   });
 });
 
-describe('store: task fields (deadline, rich description)', () => {
-  it('stores and clears deadline + description through add/update', () => {
+describe('store: task fields (rich description)', () => {
+  it('stores and clears the description through add/update', () => {
     const today = dateString(Date.now());
-    const due = Date.now() + 3_600_000;
-    store.addPlanTicket(today, { title: 'Spec', descHtml: '<p>hello</p>', deadlineMs: due });
+    store.addPlanTicket(today, { title: 'Spec', descHtml: '<p>hello</p>' });
     let t = ticketsFor(store.getState().plan, today)[0];
     expect(t.descHtml).toBe('<p>hello</p>');
-    expect(t.deadlineMs).toBe(due);
 
-    store.updatePlanTicket(today, t.id, { deadlineMs: undefined, descHtml: undefined });
+    store.updatePlanTicket(today, t.id, { descHtml: undefined });
     t = ticketsFor(store.getState().plan, today)[0];
-    expect(t.deadlineMs).toBeUndefined();
     expect(t.descHtml).toBeUndefined();
   });
 });
@@ -171,5 +168,33 @@ describe('store: plan duplication', () => {
         expect(count).toBe(0); // past day untouched
       }
     }
+  });
+});
+
+describe('store: den personalization', () => {
+  it('swaps furniture variants with whitelist validation', () => {
+    store.setDenPart('desk', 'desk_white');
+    expect(store.getState().den.desk).toBe('desk_white');
+    store.setDenPart('desk', 'desk_spaceship' as never); // bogus → ignored
+    expect(store.getState().den.desk).toBe('desk_white');
+    store.setBody('fem');
+    expect(store.getState().character.body).toBe('fem');
+  });
+
+  it('places movable items clamped to their surface zone', () => {
+    store.placeItem('room_mug', 500, 20); // desk item: x clamps, y locks
+    expect(store.getState().placements.room_mug).toEqual({ x: 122, y: 75 });
+    store.placeItem('room_posters', 10, 40); // wall: free 2D within the wall
+    expect(store.getState().placements.room_posters).toEqual({ x: 10, y: 40 });
+    store.placeItem('room_string_lights', 5, 5); // not movable → ignored
+    expect(store.getState().placements.room_string_lights).toBeUndefined();
+    store.resetPlacements();
+    expect(store.getState().placements).toEqual({});
+  });
+
+  it('marks the den creator as completed once', () => {
+    expect(store.getState().settings.denSetUp).toBe(false);
+    store.completeDenSetup();
+    expect(store.getState().settings.denSetUp).toBe(true);
   });
 });

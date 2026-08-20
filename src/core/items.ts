@@ -27,16 +27,16 @@ export const ITEMS: Item[] = [
   { id: 'acc_cap', name: 'Cap', description: 'A comfy baseball cap.', price: 100, category: 'character', kind: 'cosmetic', slot: 'accessory' },
 
   // ── Room props ─────────────────────────────────────────────────────────
-  { id: 'room_mug', name: 'Coffee Mug', description: 'A steamy mug on the desk.', price: 100, category: 'room', kind: 'prop' },
-  { id: 'room_plant', name: 'Potted Plant', description: 'A leafy friend for the corner.', price: 150, category: 'room', kind: 'prop' },
-  { id: 'room_posters', name: 'Wall Posters', description: 'A couple of framed posters.', price: 180, category: 'room', kind: 'prop' },
-  { id: 'room_lamp', name: 'Desk Lamp', description: 'A warm pool of light on the desk.', price: 200, category: 'room', kind: 'prop' },
-  { id: 'room_rug', name: 'Rug', description: 'A patterned rug to warm the floor.', price: 250, category: 'room', kind: 'prop' },
-  { id: 'room_keyboard', name: 'Mechanical Keyboard', description: 'Clacky keys in front of the monitor.', price: 300, category: 'room', kind: 'prop' },
-  { id: 'room_bookshelf', name: 'Bookshelf', description: 'A little shelf of colourful books.', price: 400, category: 'room', kind: 'prop' },
-  { id: 'room_dualmon', name: 'Dual Monitor', description: 'A second screen for extra real estate.', price: 600, category: 'room', kind: 'prop' },
+  { id: 'room_mug', name: 'Coffee Mug', description: 'A steamy mug on the desk.', price: 100, category: 'room', kind: 'prop', surface: 'desk', anchor: { x: 48, y: 75 }, footprint: { w: 10, h: 11 } },
+  { id: 'room_plant', name: 'Potted Plant', description: 'A leafy friend for the corner.', price: 150, category: 'room', kind: 'prop', surface: 'floor', anchor: { x: 8, y: 84 }, footprint: { w: 24, h: 34 } },
+  { id: 'room_posters', name: 'Wall Posters', description: 'A couple of framed posters.', price: 180, category: 'room', kind: 'prop', surface: 'wall', anchor: { x: 112, y: 16 }, footprint: { w: 40, h: 26 } },
+  { id: 'room_lamp', name: 'Desk Lamp', description: 'A warm pool of light on the desk.', price: 200, category: 'room', kind: 'prop', surface: 'desk', anchor: { x: 107, y: 56 }, footprint: { w: 18, h: 30 } },
+  { id: 'room_rug', name: 'Rug', description: 'A patterned rug to warm the floor.', price: 250, category: 'room', kind: 'prop', surface: 'floor', anchor: { x: 38, y: 106 }, footprint: { w: 84, h: 30 } },
+  { id: 'room_keyboard', name: 'Mechanical Keyboard', description: 'Clacky keys in front of the monitor.', price: 300, category: 'room', kind: 'prop', surface: 'desk', anchor: { x: 60, y: 83 }, footprint: { w: 40, h: 4 } },
+  { id: 'room_bookshelf', name: 'Bookshelf', description: 'A little shelf of colourful books.', price: 400, category: 'room', kind: 'prop', surface: 'floor', anchor: { x: 135, y: 54 }, footprint: { w: 22, h: 44 } },
+  { id: 'room_dualmon', name: 'Dual Monitor', description: 'A second screen for extra real estate.', price: 600, category: 'room', kind: 'prop', surface: 'desk', anchor: { x: 28, y: 50 }, footprint: { w: 24, h: 36 } },
   { id: 'room_string_lights', name: 'String Lights', description: 'Fairy lights that gently twinkle.', price: 900, category: 'room', kind: 'prop', animated: true },
-  { id: 'room_cat', name: 'Desk Cat', description: 'A cat that blinks and flicks its tail.', price: 1500, category: 'room', kind: 'prop', animated: true },
+  { id: 'room_cat', name: 'Desk Cat', description: 'A cat that blinks and flicks its tail.', price: 1500, category: 'room', kind: 'prop', animated: true, surface: 'desk', anchor: { x: 89, y: 68 }, footprint: { w: 25, h: 18 } },
   { id: 'room_rain', name: 'Rain Window', description: 'Rain streaks down a darker sky.', price: 2000, category: 'room', kind: 'prop', animated: true },
 
   // ── Perks (functional — see store + core) ──────────────────────────────

@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 
 import { defaultState, HOUR_MS, MINUTE_MS, type ShiftState, type State } from './core';
-import { Dashboard } from './components/Dashboard';
+import { Dashboard, FocusDock } from './components/Dashboard';
 import { Shop } from './components/Shop';
 import { RoomView } from './components/RoomView';
 import { PlanView } from './components/PlanView';
@@ -74,10 +74,11 @@ describe('render smoke', () => {
     expect(full).toContain('<svg');
   });
 
-  it('renders the full App (opens on the landing page)', () => {
+  it('renders the full App (a fresh install opens on the den creator)', () => {
     const html = renderToString(<App />);
-    expect(html).toContain('Focus');
-    expect(html).toContain('A cozy corner for deep focus');
+    expect(html).toContain('Build your den');
+    expect(html).toContain('Surprise me');
+    expect(html).toContain('<svg'); // the live scene preview
   });
 
   it('renders the Home landing page with the Focus call to action', () => {
@@ -87,21 +88,39 @@ describe('render smoke', () => {
   });
 
   it('renders the Dashboard in idle and active states', () => {
+    // Default focus style is the corner dock (rendered by App as a sibling of
+    // <main>), so the Dashboard grid itself has no hero card.
     const idle = renderToString(
       <Dashboard state={idleState()} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
     );
-    expect(idle).toContain('Your den is ready');
-    expect(idle).toContain('Settle in');
+    expect(idle).not.toContain('Your den is ready'); // hero lives in the dock
     expect(idle).toContain('Today’s plan'); // the plan widget shows before settling in
     expect(idle).not.toContain('Breathers'); // mid-day cards sleep while idle
+
+    // The dock itself: collapsed pill with the settle-in call to action.
+    const dock = renderToString(<FocusDock state={idleState()} now={NOW} />);
+    expect(dock).toContain('focus-dock');
+    expect(dock).toContain('Settle in');
+    const dockActive = renderToString(
+      <FocusDock state={{ ...idleState(), shift: activeShift() }} now={NOW} />,
+    );
+    expect(dockActive).toContain('In flow');
+
+    // 'card' mode keeps the hero in the grid (compact).
+    const s = idleState();
+    const cardMode: State = { ...s, settings: { ...s.settings, focusTimer: 'card' } };
+    const asCard = renderToString(
+      <Dashboard state={cardMode} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
+    );
+    expect(asCard).toContain('Your den is ready');
+    expect(asCard).toContain('focus-compact');
 
     const active: State = { ...idleState(), shift: activeShift() };
     const html = renderToString(
       <Dashboard state={active} now={NOW} onGoToRoom={() => {}} onGoToPlan={() => {}} />,
     );
-    expect(html).toContain('In flow');
     expect(html).toContain('Breathers');
-    expect(html).toContain('Wins');
+    expect(html).not.toContain('What did you just finish?'); // Wins widget is gone
     expect(html).toContain('Today’s plan');
   });
 
@@ -142,13 +161,13 @@ describe('render smoke', () => {
     expect(done).toContain('Plan sprint');
   });
 
-  it('renders the customize mode widgets (clock + note) when enabled', () => {
+  it('renders the customize mode widgets (clock + note + soundscape) when enabled', () => {
     const s = idleState();
     const custom: State = {
       ...s,
       settings: {
         ...s.settings,
-        dashWidgets: ['focus', 'clock', 'note'],
+        dashWidgets: ['focus', 'clock', 'note', 'soundscape'],
         dashNote: 'remember the milk',
       },
     };
@@ -157,18 +176,21 @@ describe('render smoke', () => {
     );
     expect(html).toContain('clock-time');
     expect(html).toContain('remember the milk');
+    expect(html).toContain('ss-card'); // the animated soundscape widget
+    expect(html).toContain('Rain'); // default ambience label
     expect(html).not.toContain('Today’s plan'); // hidden widgets stay hidden
     expect(html).toContain('Customize');
   });
 
-  it('renders Shop, RoomView and the Journal', () => {
+  it('renders Shop, RoomView and the Statistics page', () => {
     const s = idleState();
     expect(renderToString(<Shop state={s} />)).toContain('Shop');
     const room = renderToString(<RoomView state={s} />);
     expect(room).toContain('Character');
     expect(room).toContain('Customize');
     expect(room).toContain('Shop');
-    expect(renderToString(<History state={s} now={NOW} />)).toContain('Journal');
+    expect(room).toContain('Arrange');
+    expect(renderToString(<History state={s} now={NOW} />)).toContain('Statistics');
   });
 
   it('renders the Plan calendar, composer and empty state', () => {
@@ -214,7 +236,7 @@ describe('render smoke', () => {
     expect(renderToString(<DeepWork state={active} now={NOW} />)).toContain('Deep work');
   });
 
-  it('renders Journal analytics with completed days', () => {
+  it('renders Statistics analytics with completed days', () => {
     const s: State = {
       ...idleState(),
       perks: { ...idleState().perks, streakFreeze: 1 },
@@ -223,6 +245,7 @@ describe('render smoke', () => {
     expect(html).toContain('Rhythms');
     expect(html).toContain('Streak freeze');
     expect(html).toContain('Day by day');
+    expect(html).toContain('Task times');
     expect(html).toContain('days settled in'); // the all-time stat strip
   });
 });

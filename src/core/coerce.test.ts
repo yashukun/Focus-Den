@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { coerceState } from './coerce';
+import { clampPlacement, type PerchCtx } from './den';
+import { getItem } from './items';
 import { defaultState } from './shift';
 import type { State } from './types';
 
@@ -114,7 +116,7 @@ describe('coerceState (deep validation)', () => {
     expect(s.plan.tickets['2026-07-02'][0].priority).toBe('critical');
   });
 
-  it('bounds descHtml and drops garbage deadlines (sanitization is a UI concern)', () => {
+  it('bounds descHtml and drops retired fields (sanitization is a UI concern)', () => {
     const s = coerceState({
       v: 2,
       plan: {
@@ -127,7 +129,7 @@ describe('coerceState (deep validation)', () => {
               priority: 'med',
               createdAt: 1,
               descHtml: `<p>ok</p>${'x'.repeat(500_000)}`,
-              deadlineMs: 1_754_000_000_000,
+              deadlineMs: 1_754_000_000_000, // retired feature — never survives
             },
             {
               id: 't2',
@@ -136,7 +138,6 @@ describe('coerceState (deep validation)', () => {
               priority: 'med',
               createdAt: 1,
               descHtml: 42,
-              deadlineMs: Infinity,
             },
             {
               id: 't3',
@@ -145,7 +146,6 @@ describe('coerceState (deep validation)', () => {
               priority: 'med',
               createdAt: 1,
               descHtml: '   ',
-              deadlineMs: 'tomorrow',
             },
           ],
         },
@@ -153,11 +153,9 @@ describe('coerceState (deep validation)', () => {
     })!;
     const [a, b, c] = s.plan.tickets['2026-07-02'];
     expect(a.descHtml!.length).toBeLessThanOrEqual(400_000);
-    expect(a.deadlineMs).toBe(1_754_000_000_000);
+    expect(a).not.toHaveProperty('deadlineMs');
     expect(b.descHtml).toBeUndefined();
-    expect(b.deadlineMs).toBeUndefined();
     expect(c.descHtml).toBeUndefined(); // whitespace-only collapses away
-    expect(c.deadlineMs).toBeUndefined();
   });
 
   it('clamps scheduled start times into the day and drops garbage ones', () => {
@@ -209,6 +207,76 @@ describe('coerceState (deep validation)', () => {
     expect(coerceState({ v: 2, settings: { dashNote: 'keep me' } })!.settings.dashNote).toBe('keep me');
   });
 
+  it('whitelists den variants, body preset, and clamps placements to zones', () => {
+    const s = coerceState({
+      v: 2,
+      den: { desk: 'desk_walnut', chair: 'chair_spaceship', window: 42 },
+      character: { body: 'fem' },
+      placements: {
+        room_mug: { x: 500, y: -80 },            // clamps into the desk band
+        room_plant: { x: 40, y: 500 },           // clamps to the floor zone
+        room_cat: { x: 0, y: 140 },              // snaps to its nearest perch
+        room_string_lights: { x: 10, y: 10 },    // not movable — dropped
+        nonsense_item: { x: 1, y: 1 },           // unknown — dropped
+        room_lamp: { x: 'left', y: 60 },         // garbage coords — dropped
+      },
+    })!;
+    expect(s.den.desk).toBe('desk_walnut');
+    expect(s.den.chair).toBe('chair_office'); // bogus id fell back
+    expect(s.den.window).toBe('window_classic');
+    expect(s.character.body).toBe('fem');
+    expect(s.placements.room_mug).toEqual({ x: 122, y: 75 }); // 132 - w(10), desk y locked
+    expect(s.placements.room_plant.y).toBe(108); // floor standY2(142) - h(34)
+    expect(s.placements.room_cat).toEqual({ x: 2, y: 124 }); // front-floor perch
+    expect(s.placements.room_string_lights).toBeUndefined();
+    expect(s.placements.nonsense_item).toBeUndefined();
+    expect(s.placements.room_lamp).toBeUndefined();
+  });
+
+  it('whitelists the Today-page layout overrides (cols, sizes, focus mode)', () => {
+    const s = coerceState({
+      v: 2,
+      settings: {
+        dashCols: { clock: 'main', den: 'sideways', nonsense: 'main', week: 42 },
+        dashSizes: { clock: 'sm', plan: 'xl' },
+        focusTimer: 'card',
+      },
+    })!;
+    expect(s.settings.dashCols).toEqual({ clock: 'main' });
+    expect(s.settings.dashSizes).toEqual({ clock: 'sm' });
+    expect(s.settings.focusTimer).toBe('card');
+    // garbage → defaults
+    const d = coerceState({ v: 2, settings: { dashCols: 'no', focusTimer: 'huge' } })!;
+    expect(d.settings.dashCols).toEqual({});
+    expect(d.settings.focusTimer).toBe('dock');
+  });
+
+  it('snaps the cat to its nearest perch (desk / floor / sill / shelf)', () => {
+    const cat = getItem('room_cat')!;
+    const ctx: PerchCtx = { windowId: 'window_classic', shelfAt: { x: 135, y: 54 } };
+    // near the desk band → sits on the desk at sitting height
+    expect(clampPlacement(cat, 60, 70, ctx)).toEqual({ x: 60, y: 68 });
+    // low and central → stands on the open floor in front of the desk
+    expect(clampPlacement(cat, 60, 120, ctx)).toEqual({ x: 60, y: 120 });
+    // up by the window → the sill (y = sill top 52 − h 18)
+    expect(clampPlacement(cat, 20, 30, ctx)).toEqual({ x: 20, y: 34 });
+    // up by the bookshelf → its top, slight overhang allowed
+    expect(clampPlacement(cat, 140, 30, ctx)).toEqual({ x: 135, y: 36 });
+    // no shelf owned → the same drop point falls back to another perch
+    const noShelf = clampPlacement(cat, 140, 30, { ...ctx, shelfAt: null })!;
+    expect(noShelf.y).not.toBe(36);
+    // no ctx at all (legacy callers) → plain desk behavior
+    expect(clampPlacement(cat, 60, 120)).toEqual({ x: 60, y: 68 });
+  });
+
+  it('defaults den config + placements for older saves (the classic den)', () => {
+    const s = coerceState({ v: 2, points: 10 })!;
+    expect(s.den).toEqual(defaultState().den);
+    expect(s.character).toEqual({ body: 'masc', shirt: 'shirt_tan' });
+    expect(s.placements).toEqual({});
+    expect(s.settings.denSetUp).toBe(false);
+  });
+
   it('never copies __proto__/constructor keys from untrusted records', () => {
     const s = coerceState({
       v: 2,
@@ -220,22 +288,36 @@ describe('coerceState (deep validation)', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
-  it('drops the retired timer fields from older saves', () => {
+  it('keeps the task stopwatch fields, drops the truly retired ones', () => {
     const s = coerceState({
       v: 2,
       tracking: { dateKey: '2026-07-02', ticketId: 't1', anchorMs: 5 },
       plan: {
         tickets: {
           '2026-07-02': [
-            { id: 't1', title: 'A', status: 'todo', priority: 'med', createdAt: 1, spentMs: 9000, notified: true },
+            {
+              id: 't1',
+              title: 'A',
+              status: 'in_progress',
+              priority: 'med',
+              createdAt: 1,
+              spentMs: 9000,
+              inProgressSince: 1_700_000_000_000,
+              notified: true,
+            },
+            // hostile stopwatch values clamp/drop
+            { id: 't2', title: 'B', status: 'todo', priority: 'med', createdAt: 1, spentMs: -5, inProgressSince: Infinity },
           ],
         },
       },
     })!;
     expect('tracking' in s).toBe(false);
-    const t = s.plan.tickets['2026-07-02'][0] as unknown as Record<string, unknown>;
-    expect(t.spentMs).toBeUndefined();
-    expect(t.notified).toBeUndefined();
+    const [a, b] = s.plan.tickets['2026-07-02'];
+    expect(a.spentMs).toBe(9000); // spentMs came back in v2.7 (the task stopwatch)
+    expect(a.inProgressSince).toBe(1_700_000_000_000);
+    expect((a as unknown as Record<string, unknown>).notified).toBeUndefined();
+    expect(b.spentMs).toBeUndefined(); // clamped to 0 -> omitted
+    expect(b.inProgressSince).toBeUndefined();
   });
 
   it('migrates a bare v1 blob to a full valid state', () => {

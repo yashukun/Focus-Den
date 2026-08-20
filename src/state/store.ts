@@ -14,8 +14,17 @@ import {
   addTicket as planAddTicket,
   applyBreakGrace,
   applyStreakFreeze,
+  BODY_IDS,
   canClockIn,
+  canResumeDay,
+  clampPlacement,
+  perchCtx,
   clockIn as coreClockIn,
+  DEFAULT_DASH_WIDGETS,
+  DEN_OPTIONS,
+  SHIRT_IDS,
+  resumeDay as coreResumeDay,
+  statusPatch,
   DASH_WIDGET_IDS,
   dateString,
   defaultState,
@@ -33,8 +42,15 @@ import {
   updateTicket as planUpdate,
   weekDates,
   type Appearance,
+  type BodyId,
   type CosmeticSlot,
+  type DashCol,
+  type DashSize,
   type DashWidgetId,
+  type FocusTimerMode,
+  type DenConfig,
+  type DenPart,
+  type ShirtId,
   type Perks,
   type PlanTicket,
   type Settings,
@@ -63,7 +79,6 @@ export interface NewTicket {
   notes?: string;
   /** allowlist-sanitized HTML (the UI sanitizes before it reaches the store) */
   descHtml?: string;
-  deadlineMs?: number;
   /** scheduled start, minutes from local midnight (a slot on the week grid) */
   startMin?: number;
 }
@@ -130,6 +145,20 @@ function setSettings(patch: Partial<Settings>): void {
   setState({ ...state, settings: { ...state.settings, ...patch } });
 }
 
+/**
+ * Snap a placed cat back onto its nearest perch — called after anything a
+ * perch depends on changes (the window variant, the bookshelf's spot), so
+ * the cat never floats where its perch used to be.
+ */
+function reclampCat(next: State): State {
+  const cat = next.placements.room_cat;
+  const item = getItem('room_cat');
+  if (!cat || !item) return next;
+  const snapped = clampPlacement(item, cat.x, cat.y, perchCtx(next));
+  if (!snapped || (snapped.x === cat.x && snapped.y === cat.y)) return next;
+  return { ...next, placements: { ...next.placements, room_cat: snapped } };
+}
+
 /** Apply a perk purchase's effect to the perks record. */
 function applyPerkPurchase(perks: Perks, id: string): Perks {
   switch (id) {
@@ -168,6 +197,13 @@ export const store = {
     if (!canClockIn(state, now)) return;
     summary = null;
     setState(coreClockIn(state, now));
+  },
+
+  /** "Not tired?" — pick a wrapped-up day back up (same calendar day only). */
+  resumeDay(now: number): void {
+    if (!canResumeDay(state, now)) return;
+    summary = null;
+    setState(coreResumeDay(state, now));
   },
 
   switchStatus(target: Status, now: number): void {
@@ -308,7 +344,6 @@ export const store = {
       durationMin: fields.durationMin && fields.durationMin > 0 ? Math.round(fields.durationMin) : undefined,
       startMin: clampStartMin(fields.startMin),
       descHtml: fields.descHtml?.trim() || undefined,
-      deadlineMs: fields.deadlineMs,
       createdAt: Date.now(),
     };
     setState({ ...state, plan: planAddTicket(state.plan, dateKey, ticket, today) });
@@ -322,12 +357,16 @@ export const store = {
   },
 
   /**
-   * Change an intention's status. Marking done also logs the intention to the
+   * Change an intention's status. The transition runs through `statusPatch`
+   * so the task stopwatch stays honest (In progress starts it; leaving banks
+   * the stint into spentMs). Marking done also logs the intention to the
    * day's wins while a shift is active.
    */
   setPlanStatus(dateKey: string, id: string, status: TicketStatus): void {
     const now = Date.now();
-    const next = planUpdate(state.plan, dateKey, id, { status }, dateString(now));
+    const current = ticketsFor(state.plan, dateKey).find((t) => t.id === id);
+    if (!current) return;
+    const next = planUpdate(state.plan, dateKey, id, statusPatch(current, status, now), dateString(now));
     if (next === state.plan) return;
     setState({ ...state, plan: next });
 
@@ -459,6 +498,54 @@ export const store = {
     setState({ ...state, plan: { ...state.plan, tickets } });
   },
 
+  // ── Den personalization ────────────────────────────────────────────────────
+
+  /** Swap one piece of base furniture (all variants are free). */
+  setDenPart<P extends DenPart>(part: P, id: DenConfig[P]): void {
+    if (!(DEN_OPTIONS[part] as readonly string[]).includes(id)) return;
+    if (state.den[part] === id) return;
+    let next = { ...state, den: { ...state.den, [part]: id } };
+    // a new window moves the sill — a cat perched there follows it
+    if (part === 'window') next = reclampCat(next);
+    setState(next);
+  },
+
+  setBody(body: BodyId): void {
+    if (!BODY_IDS.includes(body) || state.character.body === body) return;
+    setState({ ...state, character: { ...state.character, body } });
+  },
+
+  setShirt(shirt: ShirtId): void {
+    if (!SHIRT_IDS.includes(shirt) || state.character.shirt === shirt) return;
+    setState({ ...state, character: { ...state.character, shirt } });
+  },
+
+  /** Move a movable item; the position clamps into its surface zone. */
+  placeItem(itemId: string, x: number, y: number): void {
+    const item = getItem(itemId);
+    if (!item) return;
+    const clamped = clampPlacement(item, x, y, perchCtx(state));
+    if (!clamped) return;
+    const current = state.placements[itemId];
+    if (current && current.x === clamped.x && current.y === clamped.y) return;
+    let next = { ...state, placements: { ...state.placements, [itemId]: clamped } };
+    // moving the bookshelf moves its top — a cat perched there follows it
+    if (itemId === 'room_bookshelf') next = reclampCat(next);
+    setState(next);
+  },
+
+  /** Put every moved item back on its default anchor. */
+  resetPlacements(): void {
+    if (Object.keys(state.placements).length === 0) return;
+    setState({ ...state, placements: {} });
+  },
+
+  /** First-run creator finished (or skipped) — never show it again. */
+  completeDenSetup(): void {
+    if (state.settings.denSetUp) return;
+    setSettings({ denSetUp: true });
+  },
+
   // ── Settings ───────────────────────────────────────────────────────────────
 
   setTheme(theme: ThemeId): void {
@@ -502,6 +589,28 @@ export const store = {
     });
     if (!seen.has('focus')) clean.unshift('focus');
     setSettings({ dashWidgets: clean });
+  },
+
+  /** Move a widget to the other Today-page column. */
+  setDashCol(id: DashWidgetId, col: DashCol): void {
+    if (!DASH_WIDGET_IDS.includes(id) || state.settings.dashCols[id] === col) return;
+    setSettings({ dashCols: { ...state.settings.dashCols, [id]: col } });
+  },
+
+  /** Switch a widget between its large and compact view. */
+  setDashSize(id: DashWidgetId, size: DashSize): void {
+    if (!DASH_WIDGET_IDS.includes(id) || state.settings.dashSizes[id] === size) return;
+    setSettings({ dashSizes: { ...state.settings.dashSizes, [id]: size } });
+  },
+
+  /** Back to the stock Today page: default widgets, columns and sizes. */
+  resetDash(): void {
+    setSettings({ dashWidgets: [...DEFAULT_DASH_WIDGETS], dashCols: {}, dashSizes: {} });
+  },
+
+  setFocusTimer(mode: FocusTimerMode): void {
+    if (state.settings.focusTimer === mode) return;
+    setSettings({ focusTimer: mode });
   },
 
   setDashNote(text: string): void {
