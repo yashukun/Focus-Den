@@ -13,6 +13,8 @@ import { motionOK } from './fx';
 import { isMuted, play, setMuted, setSoundscape, setSoundscapeVolume, warmup } from './audio';
 import { useNow, useStore } from './state/hooks';
 import { store } from './state/store';
+import { ATTENTION_EVENT, hasFreshAttention } from './state/attention';
+import { useTaskReminders } from './components/useTaskReminders';
 import { Home } from './components/Home';
 import { Dashboard, FocusDock } from './components/Dashboard';
 import { RoomView } from './components/RoomView';
@@ -81,6 +83,27 @@ export default function App() {
   }, [navCompact]);
 
   const { settings } = state;
+
+  // OS reminders (scheduled task starts + breather warnings) — mounted once
+  // here so they fire no matter which screen is open.
+  useTaskReminders(state, now);
+
+  // A reminder was clicked (web: notification onclick; desktop: the click
+  // focuses the window). Route to the planner — PlanView consumes the
+  // attention record itself and flashes the task.
+  useEffect(() => {
+    const route = () => {
+      if (!hasFreshAttention()) return;
+      setView('den');
+      setTab('plan');
+    };
+    window.addEventListener('focus', route);
+    window.addEventListener(ATTENTION_EVENT, route);
+    return () => {
+      window.removeEventListener('focus', route);
+      window.removeEventListener(ATTENTION_EVENT, route);
+    };
+  }, []);
 
   // Apply the active theme + appearance.
   useEffect(() => {

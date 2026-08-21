@@ -628,6 +628,11 @@ export const store = {
     setSettings({ focusTimer: mode });
   },
 
+  setTaskReminders(on: boolean): void {
+    if (state.settings.taskReminders === on) return;
+    setSettings({ taskReminders: on });
+  },
+
   /** Park the floating focus dock in a bottom corner (or the middle). */
   setFocusDockPos(pos: FocusDockPos): void {
     if (state.settings.focusDockPos === pos) return;

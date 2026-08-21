@@ -79,6 +79,7 @@ export function defaultSettings() {
     focusTimer: 'dock' as const,
     focusDockPos: 'left' as const,
     homeSeen: false,
+    taskReminders: true,
     dashNote: '',
     denSetUp: false,
   };

@@ -2051,6 +2051,25 @@ p { margin: 0; }
 }
 .ticket-done { opacity: 0.62; }
 .ticket-done .ticket-title { text-decoration: line-through; }
+/* A clicked reminder flashes its task for 2.5 s, then everything settles. */
+@keyframes ticketNotice {
+  0% {
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  70% {
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.ticket.is-noticed { animation: ticketNotice 2.5s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .ticket.is-noticed {
+    animation: none;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  }
+}
 
 .ticket-body { display: flex; flex-direction: column; gap: 0.28rem; min-width: 0; flex: 1; }
 .ticket-line { display: flex; align-items: flex-start; gap: 0.6rem; }
@@ -2430,15 +2449,21 @@ p { margin: 0; }
 .wk-day-add:hover { color: var(--ink); background: var(--surface-2); }
 .wk-day-add:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 
+/* Bounded by design: at most two chips + a "+N more" chip (see DayHead) —
+   no inner scrollbars, no unbounded header growth. */
 .wk-anytime {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 4.6rem;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
 }
+.wk-chip-more {
+  border-left-color: var(--line-strong);
+  color: var(--ink-soft);
+  font-weight: 700;
+  background: transparent;
+  border-style: dashed;
+}
+.wk-chip-more:hover { color: var(--ink); background: var(--surface-2); }
 .wk-chip {
   text-align: left;
   font: inherit;

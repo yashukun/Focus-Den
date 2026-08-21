@@ -32,6 +32,7 @@ import {
   type TicketStatus,
 } from '../core';
 import { store } from '../state/store';
+import { ATTENTION_EVENT, consumeAttention } from '../state/attention';
 import { play } from '../audio';
 import { RichTextEditor, RichTextViewer, textToDescHtml } from './RichText';
 import { useArmedConfirm } from './useArmedConfirm';
@@ -83,6 +84,8 @@ export function PlanView({ state, now }: PlanViewProps) {
   const [selectedDay, setSelectedDay] = useState(todayKey);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+  // A clicked reminder lands here: jump to the task's day and flash its row.
+  const [noticedId, setNoticedId] = useState<string | null>(null);
 
   const tickets = ticketsFor(state.plan, selectedDay);
   const selected = selectedId ? tickets.find((t) => t.id === selectedId) ?? null : null;
@@ -108,6 +111,45 @@ export function PlanView({ state, now }: PlanViewProps) {
     setMode(next);
     setSelectedId(null);
   }
+
+  // Consume a pending reminder click: on mount (App just switched us in),
+  // on window focus (desktop notification click) and on the attention event
+  // (web notification click while the planner is already open).
+  useEffect(() => {
+    const tryConsume = () => {
+      const p = consumeAttention();
+      if (!p) return;
+      rememberedMode = 'day';
+      setMode('day');
+      setSelectedDay(p.dateKey);
+      setSelectedId(null);
+      const m = monthOf(p.dateKey);
+      setView({ y: Number(p.dateKey.slice(0, 4)), m });
+      setNoticedId(p.ticketId);
+      // scroll the flashed row into view once it has rendered
+      window.setTimeout(() => {
+        document.querySelector('.ticket.is-noticed')?.scrollIntoView({
+          block: 'center',
+          behavior: 'smooth',
+        });
+      }, 120);
+    };
+    tryConsume();
+    window.addEventListener('focus', tryConsume);
+    window.addEventListener(ATTENTION_EVENT, tryConsume);
+    return () => {
+      window.removeEventListener('focus', tryConsume);
+      window.removeEventListener(ATTENTION_EVENT, tryConsume);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listeners live once
+  }, []);
+
+  // The flash is brief by design: 2.5 s, then the row returns to normal.
+  useEffect(() => {
+    if (!noticedId) return;
+    const t = window.setTimeout(() => setNoticedId(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [noticedId]);
 
   const detail = selected && (
     <DetailPanel
@@ -178,6 +220,7 @@ export function PlanView({ state, now }: PlanViewProps) {
             dateKey={selectedDay}
             todayKey={todayKey}
             selectedId={selected?.id ?? null}
+            noticedId={noticedId}
             onSelect={setSelectedId}
             onAdded={(title) => setPendingTitle(title)}
           />
@@ -284,6 +327,7 @@ function DayPanel({
   dateKey,
   todayKey,
   selectedId,
+  noticedId,
   onSelect,
   onAdded,
 }: {
@@ -291,6 +335,8 @@ function DayPanel({
   dateKey: string;
   todayKey: string;
   selectedId: string | null;
+  /** reminder-clicked ticket — briefly flashed */
+  noticedId: string | null;
   onSelect: (id: string) => void;
   onAdded: (titleKey: string) => void;
 }) {
@@ -397,6 +443,7 @@ function DayPanel({
               dateKey={dateKey}
               editable={editable}
               selected={t.id === selectedId}
+              noticed={t.id === noticedId}
               menuOpen={menuFor === t.id}
               onToggleMenu={() => setMenuFor((v) => (v === t.id ? null : t.id))}
               onCloseMenu={() => setMenuFor(null)}
@@ -530,6 +577,7 @@ function TicketRow({
   dateKey,
   editable,
   selected,
+  noticed,
   menuOpen,
   onToggleMenu,
   onCloseMenu,
@@ -539,6 +587,8 @@ function TicketRow({
   dateKey: string;
   editable: boolean;
   selected: boolean;
+  /** true for ~2.5 s after this task's reminder was clicked */
+  noticed: boolean;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
@@ -566,6 +616,7 @@ function TicketRow({
         `prio-${ticket.priority}`,
         done ? 'ticket-done' : '',
         selected ? 'is-selected' : '',
+        noticed ? 'is-noticed' : '',
       ].filter(Boolean).join(' ')}
       onClick={onSelect}
       aria-current={selected || undefined}

@@ -55,6 +55,7 @@ import {
 import { store } from '../state/store';
 import { isTauri } from '../state/desktop';
 import { play } from '../audio';
+import { ensureNotifyPermission } from '../notify';
 import { RoomScene } from '../room/RoomScene';
 import { MediaCard } from './MediaCard';
 import { SoundscapeCard } from './SoundscapeCard';
@@ -554,26 +555,8 @@ function StatusCard({ state, now }: { state: State; now: number }) {
   const toThreshold = currentBreak ? breakThreshold(currentBreak, graceBonusMs) - used[currentBreak] : 0;
   const warn = currentBreak != null && toThreshold > 0 && toThreshold <= 2 * 60 * 1000;
 
-  // Fire a single browser notification (when permission is granted) per break.
-  const notifiedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!currentBreak) {
-      notifiedFor.current = null;
-      return;
-    }
-    if (!warn || notifiedFor.current === currentBreak) return;
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      try {
-        new Notification('Breather almost done', {
-          body: `${BREAK_LABELS[currentBreak]} reaches its limit soon — tap In flow to keep the day smooth.`,
-        });
-      } catch {
-        // notifications unavailable
-      }
-      notifiedFor.current = currentBreak;
-    }
-  }, [warn, currentBreak]);
-
+  // The OS notification for this warning lives in useTaskReminders (App) —
+  // it fires no matter which screen is open. Here we only show the banner.
   const [endArmed, fireEnd] = useArmedConfirm();
 
   return (
@@ -601,15 +584,13 @@ function StatusCard({ state, now }: { state: State; now: number }) {
             ⚠ {BREAK_LABELS[currentBreak]} ends in {formatMS(toThreshold)} — tap{' '}
             <strong>In flow</strong> to keep the day smooth.
           </span>
-          {typeof Notification !== 'undefined' && Notification.permission === 'default' && (
-            <button
-              className="btn btn-sm"
-              data-sound="none"
-              onClick={() => void Notification.requestPermission()}
-            >
-              Enable alerts
-            </button>
-          )}
+          <button
+            className="btn btn-sm"
+            data-sound="none"
+            onClick={() => void ensureNotifyPermission()}
+          >
+            Enable alerts
+          </button>
         </div>
       )}
 

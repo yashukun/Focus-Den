@@ -6,6 +6,7 @@
 import { useRef, useState } from 'react';
 import { SOUNDSCAPE_IDS, SOUNDSCAPE_LABELS, type Appearance, type State, type ThemeId } from '../core';
 import { store } from '../state/store';
+import { sendNotification } from '../notify';
 import { DesktopUpdate } from './DesktopUpdate';
 import { useArmedConfirm } from './useArmedConfirm';
 
@@ -134,6 +135,47 @@ export function Settings({ state }: SettingsProps) {
         <p className="muted">
           Corner dock keeps the timer as a small collapsible pill in the bottom-left of the
           Today page; Compact card keeps it in the layout as a smaller card.
+        </p>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h2>Notifications</h2></div>
+        <div className="setting-row">
+          <span className="equip-label">Task reminders</span>
+          <div className="equip-options">
+            <button
+              className={`btn btn-sm chip-toggle ${settings.taskReminders ? 'is-on' : ''}`}
+              aria-pressed={settings.taskReminders}
+              onClick={() => store.setTaskReminders(true)}
+            >
+              On
+            </button>
+            <button
+              className={`btn btn-sm chip-toggle ${!settings.taskReminders ? 'is-on' : ''}`}
+              aria-pressed={!settings.taskReminders}
+              onClick={() => store.setTaskReminders(false)}
+            >
+              Off
+            </button>
+          </div>
+        </div>
+        <div className="manage-row">
+          <button
+            className="btn btn-sm"
+            data-sound="none"
+            onClick={() => {
+              void sendNotification(
+                'Focus Den',
+                'Notifications are working ✓ — you’ll hear from us when a scheduled task starts.',
+              ).then(() => setMsg('Test notification sent — check your notification center.'));
+            }}
+          >
+            Send a test notification
+          </button>
+        </div>
+        <p className="muted">
+          A quiet nudge when a scheduled task’s time arrives, and when a breather is about to
+          run over. Clicking the reminder jumps straight to the task.
         </p>
       </section>
 

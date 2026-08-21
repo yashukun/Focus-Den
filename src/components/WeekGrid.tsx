@@ -17,6 +17,7 @@ import {
   formatDateLabel,
   formatSlotTime,
   isDateEditable,
+  sortDayTickets,
   ticketsFor,
   weekDates,
   type PlanTicket,
@@ -480,7 +481,15 @@ function DayHead({
   onAdd: () => void;
 }) {
   const editable = isDateEditable(dateKey, todayKey);
-  const anytime = ticketsFor(state.plan, dateKey).filter((t) => t.startMin == null);
+  // Unscheduled ("anytime") tasks used to pile into a scrolling stack of tiny
+  // chips inside the header — cap it: open tasks first, at most two chips,
+  // and a "+N more" chip that opens the day. Bounded, no inner scrollbars.
+  const anytime = sortDayTickets(
+    ticketsFor(state.plan, dateKey).filter((t) => t.startMin == null),
+  );
+  const ANYTIME_CHIPS = 2;
+  const anytimeShown = anytime.slice(0, ANYTIME_CHIPS);
+  const anytimeMore = anytime.length - anytimeShown.length;
   const label = formatDateLabel(dateKey); // "Mon, Jun 29"
   return (
     <div
@@ -516,7 +525,7 @@ function DayHead({
       </div>
       {anytime.length > 0 && (
         <div className="wk-anytime">
-          {anytime.map((t) => (
+          {anytimeShown.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -533,6 +542,17 @@ function DayHead({
               {t.title}
             </button>
           ))}
+          {anytimeMore > 0 && (
+            <button
+              type="button"
+              className="wk-chip wk-chip-more"
+              title={`${anytimeMore} more without a slot — open the day`}
+              data-sound="none"
+              onClick={() => onOpenDay(dateKey)}
+            >
+              +{anytimeMore} more
+            </button>
+          )}
         </div>
       )}
     </div>

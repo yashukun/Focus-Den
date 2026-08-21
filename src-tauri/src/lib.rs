@@ -317,6 +317,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             save_state_file,
             load_state_file,

@@ -232,6 +232,7 @@ describe('render smoke', () => {
     const settings = renderToString(<Settings state={s} />);
     expect(settings).toContain('Settings');
     expect(settings).toContain('Soundscape');
+    expect(settings).toContain('Notifications');
     expect(settings).toContain('Reset everything');
 
     const active: State = { ...s, settings: { ...s.settings, deepWork: true }, shift: activeShift() };

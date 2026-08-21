@@ -16,7 +16,7 @@ npx tauri icon <1024.png>   # regenerate all icons from a new source
 
 Rust toolchain via rustup (`~/.cargo/bin`). The shell is deliberately thin
 (`src-tauri/src/lib.rs`): two commands (`save_state_file`/`load_state_file`
-— atomic write to the app data dir) plus the updater + process plugins.
+— atomic write to the app data dir) plus the updater + process + notification plugins.
 Frontend touchpoints: `src/state/desktop.ts` (disk mirror: restore a
 fresh-looking start from disk, debounce-mirror every save) and
 `components/DesktopUpdate.tsx` (Settings card; desktop-only, dynamic

@@ -213,6 +213,7 @@ function coerceSettings(v: unknown, base: Settings): Settings {
       base.focusDockPos,
     ),
     homeSeen: bool(obj.homeSeen, base.homeSeen),
+    taskReminders: bool(obj.taskReminders, base.taskReminders),
     dashNote: str(obj.dashNote, MAX_DASH_NOTE) ?? base.dashNote,
     denSetUp: bool(obj.denSetUp, base.denSetUp),
   };

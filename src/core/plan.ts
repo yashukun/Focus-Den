@@ -21,9 +21,36 @@ export function ticketsFor(plan: PlanState, dateKey: string): PlanTicket[] {
 }
 
 /** Scheduled slots first in time order; "anytime" tickets after, as entered. */
+/**
+ * Day-list order: open tasks stack on top (scheduled ones by their slot,
+ * unscheduled after), and COMPLETED tasks sink to the bottom the moment
+ * they're checked off — the list always reads "what's left" first.
+ */
 export function sortDayTickets(list: PlanTicket[]): PlanTicket[] {
-  return [...list].sort(
-    (a, b) => (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER),
+  return [...list].sort((a, b) => {
+    const doneDiff = Number(a.status === 'done') - Number(b.status === 'done');
+    if (doneDiff) return doneDiff;
+    const startDiff =
+      (a.startMin ?? Number.MAX_SAFE_INTEGER) - (b.startMin ?? Number.MAX_SAFE_INTEGER);
+    if (startDiff) return startDiff;
+    return a.createdAt - b.createdAt;
+  });
+}
+
+/**
+ * Scheduled, still-open tickets whose start time crossed (fromMin, toMin]
+ * (minutes from local midnight) — the reminder engine calls this every tick
+ * with the last-checked minute, so each start fires exactly once.
+ */
+export function dueScheduledTickets(
+  plan: PlanState,
+  dateKey: string,
+  fromMin: number,
+  toMin: number,
+): PlanTicket[] {
+  return ticketsFor(plan, dateKey).filter(
+    (t) =>
+      t.startMin != null && t.status !== 'done' && t.startMin > fromMin && t.startMin <= toMin,
   );
 }
 

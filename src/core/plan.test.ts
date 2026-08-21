@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addTicket,
+  dueScheduledTickets,
   freshPlan,
   isDateEditable,
   liveSpentMs,
   moveTicketToDay,
   moveTicketToNextDay,
   removeTicket,
+  sortDayTickets,
   statusPatch,
   ticketsFor,
   updateTicket,
@@ -59,6 +61,49 @@ describe('plan: add / update / remove', () => {
     p = addTicket(p, TODAY, tk('b'), TODAY);
     p = removeTicket(p, TODAY, 'a', TODAY);
     expect(ticketsFor(p, TODAY).map((t) => t.id)).toEqual(['b']);
+  });
+});
+
+describe('plan: day-list order (done sinks)', () => {
+  it('stacks open tasks first (scheduled by slot, then unscheduled), done at the bottom', () => {
+    const list = [
+      tk('doneEarly', { status: 'done', startMin: 8 * 60, createdAt: 1 }),
+      tk('late', { startMin: 15 * 60, createdAt: 2 }),
+      tk('anytimeB', { createdAt: 4 }),
+      tk('early', { startMin: 9 * 60, createdAt: 3 }),
+      tk('doneAnytime', { status: 'done', createdAt: 5 }),
+      tk('anytimeA', { createdAt: 0 }),
+    ];
+    expect(sortDayTickets(list).map((t) => t.id)).toEqual([
+      'early', // open + earliest slot
+      'late',
+      'anytimeA', // open, no slot — insertion order
+      'anytimeB',
+      'doneEarly', // completed sink, keeping their own slot order
+      'doneAnytime',
+    ]);
+  });
+});
+
+describe('plan: due scheduled tickets (the reminder window)', () => {
+  it('fires each start exactly once as the checked window advances', () => {
+    const p: PlanState = {
+      tickets: {
+        [TODAY]: [
+          tk('nine', { startMin: 9 * 60 }),
+          tk('nineDone', { startMin: 9 * 60, status: 'done' }),
+          tk('ten', { startMin: 10 * 60 }),
+          tk('loose', {}), // unscheduled — never due
+        ],
+      },
+    };
+    // window ending exactly at 9:00 catches the 9:00 task (not the done one)
+    expect(dueScheduledTickets(p, TODAY, 8 * 60 + 59, 9 * 60).map((t) => t.id)).toEqual(['nine']);
+    // the next window starts where the last ended — 9:00 can't fire twice
+    expect(dueScheduledTickets(p, TODAY, 9 * 60, 9 * 60 + 30)).toEqual([]);
+    // a big catch-up window picks up everything crossed in between
+    expect(dueScheduledTickets(p, TODAY, 9 * 60, 10 * 60).map((t) => t.id)).toEqual(['ten']);
+    expect(dueScheduledTickets(p, '2026-01-01', 0, 24 * 60)).toEqual([]);
   });
 });
 

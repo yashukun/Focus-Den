@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Main-window permissions: core + self-update (custom state-file commands need no grant).",
   "windows": ["main"],
-  "permissions": ["core:default", "updater:default", "process:default"]
+  "permissions": ["core:default", "updater:default", "process:default", "notification:default"]
 }

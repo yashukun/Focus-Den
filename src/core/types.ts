@@ -251,6 +251,8 @@ export interface Settings {
   focusDockPos: FocusDockPos;
   /** the landing page has been passed once — later opens go straight to Today */
   homeSeen: boolean;
+  /** OS notifications when a scheduled task's time arrives (+ breather alerts) */
+  taskReminders: boolean;
   /** free-text contents of the Today-page note widget */
   dashNote: string;
   /**

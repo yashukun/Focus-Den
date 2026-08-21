@@ -23,7 +23,14 @@ transition; z-index above the header; below 880 px it stays under the
 header — no free middle). In compact mode only the active tab keeps its
 label, and App.tsx drives a macOS-dock-style hover magnification (per-icon
 gaussian scale by cursor distance, gated by `motionOK`). The single `useNow()` here keeps the engine
-live on every screen. A document-level click listener plays button sounds —
+live on every screen, and `useTaskReminders` (mounted once here) sends OS
+notifications when a scheduled task's time arrives and when a breather is
+about to overrun — web Notification API in the browser, the Tauri
+notification plugin on desktop (`src/notify.ts`). A clicked reminder is a
+hand-off through `state/attention.ts`: App routes to the planner on
+focus/attention, PlanView consumes the record, jumps to the day and flashes
+the task row for 2.5 s (`.is-noticed`). Settings → Notifications has the
+toggle (`settings.taskReminders`) and a test button. A document-level click listener plays button sounds —
 see [sound.md](sound.md) for the routing policy.
 
 ## Screens
@@ -83,7 +90,9 @@ see [sound.md](sound.md) for the routing policy.
   changes). Week mode: `WeekGrid`. Past days are locked read-only
   everywhere. Esc closes the detail panel and the copy-day picker.
 - **WeekGrid.tsx** — seven 24 h columns; a ticket with `startMin` is a slot
-  (height = `durationMin`). Click empty space to create, drag to move across
+  (height = `durationMin`). Unscheduled tickets show as at most TWO chips in
+  the day header (open ones first) plus a "+N more" chip that opens the Day
+  view — bounded by design, no inner scrollbars. Click empty space to create, drag to move across
   time/days (15 min snap), drag the bottom edge to resize, overlapping slots
   share lanes (greedy interval partitioning). Pointer-event based with a 5 px
   click/drag threshold.

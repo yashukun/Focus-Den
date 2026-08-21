@@ -75,7 +75,10 @@ compare lexicographically). Mutations (`addTicket`, `updateTicket`,
 (`critical/high/med/low`), optional `deadlineMs`, `startMin` (slot on the week
 grid), `durationMin`, rich `descHtml`. Shared display order + labels:
 `TICKET_STATUS_IDS/LABELS`, `TICKET_PRIORITY_IDS/LABELS` (`constants.ts`).
-Shared derivations: `sortDayTickets` (scheduled first), `isTicketOverdue`.
+Shared derivations: `sortDayTickets` — open tasks first (scheduled by slot,
+then unscheduled by creation), COMPLETED tasks sink to the bottom.
+`dueScheduledTickets(plan, day, fromMin, toMin]` powers the reminder engine:
+each scheduled start is caught exactly once as the checked window advances.
 The **task stopwatch**: `statusPatch` starts timing when a ticket enters
 `in_progress` (`inProgressSince`) and banks the stint into `spentMs` on
 leaving; `liveSpentMs` adds the running stint. Shown in the plan detail
