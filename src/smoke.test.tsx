@@ -186,10 +186,12 @@ describe('render smoke', () => {
     const s = idleState();
     expect(renderToString(<Shop state={s} />)).toContain('Shop');
     const room = renderToString(<RoomView state={s} />);
-    expect(room).toContain('Character');
     expect(room).toContain('Customize');
     expect(room).toContain('Shop');
     expect(room).toContain('Arrange');
+    expect(room).toContain('Room'); // the compact prop checklist
+    // The character (basics + cosmetics) lives ONLY in arrange mode now.
+    expect(room).not.toContain('Character');
     expect(renderToString(<History state={s} now={NOW} />)).toContain('Statistics');
   });
 

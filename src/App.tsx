@@ -41,7 +41,11 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 export default function App() {
   const now = useNow();
   const { state, summary } = useStore();
-  const [view, setView] = useState<View>('home');
+  // The landing page is a welcome, not a toll booth: once it has been passed,
+  // opening the app drops you straight into Today (the brand still goes back).
+  const [view, setView] = useState<View>(() =>
+    store.getState().settings.homeSeen ? 'den' : 'home',
+  );
   const [tab, setTab] = useState<Tab>('dashboard');
   const [soundOn, setSoundOn] = useState(() => !isMuted());
 
@@ -150,6 +154,7 @@ export default function App() {
   function enterDen() {
     setTab('dashboard');
     setView('den');
+    store.markHomeSeen();
   }
 
   // First run (or a full reset): build-your-den before anything else.

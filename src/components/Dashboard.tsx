@@ -343,8 +343,63 @@ export function FocusDock({ state, now }: { state: State; now: number }) {
   const stint = shift.statusStart != null ? Math.max(0, now - shift.statusStart) : 0;
   const ready = !active && canClockIn(state, now);
 
+  // Drag the pill anywhere along the bottom edge; on release it parks in the
+  // nearest of three spots (left / middle / right) and remembers it.
+  const pos = state.settings.focusDockPos;
+  const [dragX, setDragX] = useState<number | null>(null);
+  const down = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const dragged = useRef(false);
+  // The app renders under `html { zoom }`, so pointer coords (visual px) must
+  // be divided by the zoom before they can position a fixed element (CSS px) —
+  // otherwise the pill lands up to 25% too far right and leaves the screen.
+  const zoom = useRef(1);
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    down.current = { x: e.clientX, y: e.clientY, moved: false };
+    // currentCSSZoom is the standardized effective zoom; older engines fall
+    // back to the computed style, and anything else means no zoom.
+    const el = e.currentTarget as HTMLElement & { currentCSSZoom?: number };
+    zoom.current =
+      el.currentCSSZoom ||
+      parseFloat(getComputedStyle(document.documentElement).zoom || '1') ||
+      1;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // synthetic events (tests) have no pointer to capture
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const d = down.current;
+    if (!d) return;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+    d.moved = true;
+    // Keep the whole pill on screen even when the cursor rides the edge.
+    const half = (e.currentTarget as HTMLElement).getBoundingClientRect().width / 2 + 8;
+    setDragX(Math.min(window.innerWidth - half, Math.max(half, e.clientX)));
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    const d = down.current;
+    down.current = null;
+    if (!d?.moved) return; // a plain click — onClick toggles the panel
+    dragged.current = true; // swallow the click that follows this drag
+    const third = window.innerWidth / 3;
+    store.setFocusDockPos(e.clientX < third ? 'left' : e.clientX < third * 2 ? 'center' : 'right');
+    setDragX(null);
+  }
+
   return (
-    <div className={`focus-dock ${open ? 'is-open' : ''}`}>
+    <div
+      className={`focus-dock pos-${pos} ${open ? 'is-open' : ''} ${dragX != null ? 'is-dragging' : ''}`}
+      style={
+        dragX != null
+          ? { left: dragX / zoom.current, right: 'auto', transform: 'translateX(-50%)' }
+          : undefined
+      }
+    >
       {open && (
         <div className="focus-dock-panel">
           <FocusHero state={state} now={now} compact />
@@ -355,8 +410,22 @@ export function FocusDock({ state, now }: { state: State; now: number }) {
         className={`focus-dock-pill ${active ? `tone-${meta.tone}` : ''}`}
         aria-expanded={open}
         aria-label={open ? 'Collapse the focus timer' : 'Expand the focus timer'}
+        title="Drag me to another corner"
         data-sound="none"
-        onClick={() => setOpen(!open)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          down.current = null;
+          setDragX(null);
+        }}
+        onClick={() => {
+          if (dragged.current) {
+            dragged.current = false;
+            return;
+          }
+          setOpen(!open);
+        }}
       >
         {active ? (
           <>

@@ -6,10 +6,12 @@ drilling of callbacks beyond tab switches.
 
 ## App shell (`App.tsx`)
 
-Two views: `home` (landing) and `den` (the app). Before either: on a fresh
-install (`!settings.denSetUp && isPristineState`) the shell renders
-**DenCreator** full-screen instead — existing dens never see it, and a full
-reset re-offers it. Inside the den: header
+Two views: `home` (landing) and `den` (the app). The landing page is shown
+once: entering the den sets `settings.homeSeen`, and from then on the app
+opens straight on Today (the brand button still goes back). Before either:
+on a fresh install (`!settings.denSetUp && isPristineState`) the shell
+renders **DenCreator** full-screen instead — existing dens never see it, and
+a full reset re-offers it. Inside the den: header
 (brand → back home, live status pill, balance, theme + sound toggles), tab bar
 (`Today / Plan / Den / Stats / Settings`), the active screen (`key={tab}`
 remounts it so the entrance animation replays), the summary modal, onboarding,
@@ -50,7 +52,15 @@ see [sound.md](sound.md) for the routing policy.
   Layout mutations read `store.getState()` (not render-time props) so rapid
   clicks can't act on a stale list. The focus timer renders per
   `settings.focusTimer`: **'dock'** (default) = `FocusDock`, a collapsible
-  bottom-left pill+panel that App.tsx renders as a SIBLING of `<main>` (the
+  pill+panel that parks in a bottom corner — drag the pill and it snaps to
+  the nearest third of the viewport (`settings.focusDockPos`:
+  left/center/right); a drag swallows the click that follows so it never
+  toggles the panel by accident. Drag math divides pointer coords by the
+  effective `currentCSSZoom` (the app runs under `html { zoom: 1.25 }` —
+  raw clientX would overshoot the screen) and clamps so the pill never
+  leaves the viewport. The pill itself is quiet liquid glass (frosted
+  translucency, hairline border, top sheen) and deliberately never changes
+  shape — no press transform, unlike the app's chunky buttons. App.tsx renders it as a SIBLING of `<main>` (the
   screen-entrance animation retains a transform, which would otherwise trap
   `position: fixed` inside the screen); **'card'** = the hero stays in the
   grid, compact (`.focus-compact`). Choice lives in Settings → Today page. The `plan` widget shows today's tickets (check-off, quick-add,
@@ -90,11 +100,11 @@ see [sound.md](sound.md) for the routing policy.
   huge (the original bug).
 - **RoomView.tsx** — big `RoomScene` + Customize / **Shop.tsx** (embedded;
   cards celebrate purchases via fx). The Customize panel is split by mode:
-  day to day it shows only equip-per-slot cosmetics + the prop checklist
-  (with a nudge toward Arrange); ARRANGE mode swaps the panel to the free
-  decoration — den parts (7 chip rows over `DEN_OPTIONS`) and the character
-  basics (body chips + shirt `.swatch` buttons). Entering Arrange also
-  forces the Customize subtab. Labels live in **denLabels.ts**, shared with
+  day to day it is just the prop checklist + shop link (with a nudge toward
+  Arrange); ARRANGE mode is the one place the den AND character are edited —
+  den parts (7 chip rows over `DEN_OPTIONS`), character basics (body chips +
+  shirt `.swatch` buttons) and the equip-per-slot owned cosmetics all live
+  there. Entering Arrange also forces the Customize subtab. Labels live in **denLabels.ts**, shared with
   the creator. The stage's
   "⠿ Arrange" toggle turns on drag: movable owned props (highlighted via
   `[data-item]` + drop-shadow) follow the pointer as a LOCAL draft placement

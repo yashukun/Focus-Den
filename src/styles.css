@@ -580,14 +580,37 @@ p { margin: 0; }
 /* ── Focus dock — the timer as a collapsible bottom-left pill ──────────────── */
 .focus-dock {
   position: fixed;
-  left: max(0.9rem, env(safe-area-inset-left));
   bottom: max(0.9rem, env(safe-area-inset-bottom));
   z-index: 24; /* above content, below modal overlays */
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 0.5rem;
   max-width: min(380px, calc(100vw - 1.8rem));
+  /* parking is instant while dragging, eased on release (see is-dragging) */
+  transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    right 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Three parking spots along the bottom edge; the pill drags between them. */
+.focus-dock.pos-left {
+  left: max(0.9rem, env(safe-area-inset-left));
+  align-items: flex-start;
+}
+.focus-dock.pos-right {
+  right: max(0.9rem, env(safe-area-inset-right));
+  align-items: flex-end;
+}
+.focus-dock.pos-center {
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+}
+/* While dragging, the dock is positioned by its LEFT edge — near the right
+   side of the screen the shrink-to-fit width would collapse the pill into a
+   circle. max-content keeps its true size regardless of position. */
+.focus-dock.is-dragging { transition: none; user-select: none; width: max-content; }
+.focus-dock.is-dragging .focus-dock-pill { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  .focus-dock { transition: none; }
 }
 .focus-dock-panel {
   width: min(360px, calc(100vw - 1.8rem));
@@ -598,6 +621,10 @@ p { margin: 0; }
   animation: dockRise 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .focus-dock-panel .card { margin: 0; }
+/* The pill is quiet liquid glass — unlike the app's chunky buttons it never
+   changes shape or jumps: no press transform, no hard shadow. Frosted
+   translucency + a hairline border + a soft top sheen, and only the tint
+   deepens on hover. It's draggable, so a steady silhouette matters. */
 .focus-dock-pill {
   display: inline-flex;
   align-items: center;
@@ -606,17 +633,24 @@ p { margin: 0; }
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--ink);
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(8px);
-  border: 2px solid var(--line-strong);
+  background: color-mix(in srgb, var(--surface) 52%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
   border-radius: 999px;
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  box-shadow: 3px 3px 0 var(--line-strong);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  padding: 0.55rem 0.95rem;
+  white-space: nowrap; /* the label never wraps — the silhouette is sacred */
+  cursor: grab;
+  touch-action: none; /* the pill is draggable */
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 color-mix(in srgb, #fff 32%, transparent);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
-.focus-dock-pill:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--line-strong); }
-.focus-dock-pill:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--line-strong); }
+.focus-dock-pill:hover {
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 26%, transparent);
+}
 .focus-dock-pill .status-dot { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
 .focus-dock-pill.tone-work { color: var(--work); }
 .focus-dock-pill.tone-break { color: var(--break); }

@@ -89,6 +89,17 @@ export const SHIFT_MS = 12 * HOUR_MS;
 /** Grace period added to every break limit before the auto-offline kicks in. */
 export const GRACE_MS = 3 * MINUTE_MS;
 
+/**
+ * How long the den may go unseen mid-shift before the gap counts as Away.
+ * Covers a quit, a crash and a sleeping laptop alike: whatever happened, the
+ * app wasn't there, so that time can't be flow. Comfortably longer than a
+ * heartbeat so a momentary stall never trips it.
+ */
+export const AWAY_GAP_MS = 90 * 1000;
+
+/** How often the heartbeat re-stamps `shift.lastSeen` (keeps writes cheap). */
+export const SEEN_REFRESH_MS = 30 * 1000;
+
 /** Per-break time budgets. */
 export const BREAK_LIMITS: Record<BreakKey, number> = {
   break1: 20 * MINUTE_MS,

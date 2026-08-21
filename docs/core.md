@@ -37,6 +37,13 @@ Statuses: `idle → working ⇄ break1/break2/lunch ⇄ offline → ended`.
 
 - One shift per calendar day (`canClockIn`); the day runs **12 h** (`SHIFT_MS`)
   from clock-in, then auto-finalizes (`shouldAutoEnd` → `finalizeShift`).
+- **Presence**: the heartbeat stamps `shift.lastSeen` (throttled to
+  `SEEN_REFRESH_MS`). If the den goes unseen for longer than `AWAY_GAP_MS`
+  mid-shift — quit, crash, sleeping laptop — `reconcileAway` banks time up to
+  that last stamp and drifts Away *from there*, so dark hours land in
+  `offline`, never in flow. It deliberately keeps `clean` (a shut app is not
+  an overrun breather). Saves without `lastSeen` are ignored, so upgrading
+  never looks like a gap.
 - **"Not tired?"**: a wrapped-up day can resume the same calendar day
   (`canResumeDay`/`resumeDay`) — a normal fresh shift whose finalize MERGES
   into the day's existing history entry and pays worked-hour points only

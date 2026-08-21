@@ -226,9 +226,9 @@ function Customize({
   arranging: boolean;
   onBrowseShop: () => void;
 }) {
-  // Arrange mode is the redecorating mode: the free furniture and character
-  // basics take over the panel; day to day it stays compact (cosmetics,
-  // props, shop).
+  // Arrange mode is the ONLY place the character is edited (free basics AND
+  // owned cosmetics) — day to day the panel is just the prop checklist +
+  // shop, with a nudge toward Arrange.
   if (arranging) {
     return (
       <>
@@ -294,6 +294,39 @@ function Customize({
               ))}
             </div>
           </div>
+          {/* owned cosmetics equip here too — arrange is the one wardrobe */}
+          {SLOTS.map(({ slot, label }) => {
+            const options = ownedCosmetics(state.owned, slot);
+            const equipped = state.equipped[slot];
+            return (
+              <div key={slot} className="equip-row">
+                <span className="equip-label">{label}</span>
+                {options.length === 0 ? (
+                  <span className="muted">None owned yet — see the shop</span>
+                ) : (
+                  <div className="equip-options">
+                    <button
+                      className={`btn btn-sm chip-toggle ${equipped === null ? 'is-on' : ''}`}
+                      aria-pressed={equipped === null}
+                      onClick={() => store.equip(slot, null)}
+                    >
+                      None
+                    </button>
+                    {options.map((item) => (
+                      <button
+                        key={item.id}
+                        className={`btn btn-sm chip-toggle ${equipped === item.id ? 'is-on' : ''}`}
+                        aria-pressed={equipped === item.id}
+                        onClick={() => store.equip(slot, item.id)}
+                      >
+                        {item.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </section>
       </>
     );
@@ -301,44 +334,6 @@ function Customize({
 
   return (
     <>
-      <section className="card">
-        <div className="card-head">
-          <h2>Character</h2>
-        </div>
-        {SLOTS.map(({ slot, label }) => {
-          const options = ownedCosmetics(state.owned, slot);
-          const equipped = state.equipped[slot];
-          return (
-            <div key={slot} className="equip-row">
-              <span className="equip-label">{label}</span>
-              {options.length === 0 ? (
-                <span className="muted">None owned yet</span>
-              ) : (
-                <div className="equip-options">
-                  <button
-                    className={`btn btn-sm chip-toggle ${equipped === null ? 'is-on' : ''}`}
-                    aria-pressed={equipped === null}
-                    onClick={() => store.equip(slot, null)}
-                  >
-                    None
-                  </button>
-                  {options.map((item) => (
-                    <button
-                      key={item.id}
-                      className={`btn btn-sm chip-toggle ${equipped === item.id ? 'is-on' : ''}`}
-                      aria-pressed={equipped === item.id}
-                      onClick={() => store.equip(slot, item.id)}
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </section>
-
       <section className="card">
         <div className="card-head">
           <h2>Room</h2>

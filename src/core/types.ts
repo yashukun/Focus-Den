@@ -45,6 +45,12 @@ export interface ShiftState {
   tasks: Task[];
   /** false once a break overran its limit + grace and auto-flipped to offline. */
   clean: boolean;
+  /**
+   * epoch ms the app was last known to be alive during this shift. A long gap
+   * (quit, crash, sleep) is reconciled into Away time on the next tick, so a
+   * shut den never banks flow — see `reconcileAway`.
+   */
+  lastSeen?: number;
 }
 
 /** Per-week streak tracking. Days are indexed 0=Mon .. 5=Sat (Sunday is off). */
@@ -215,6 +221,8 @@ export type DashCol = 'main' | 'side';
 export type DashSize = 'lg' | 'sm';
 /** Focus timer style: floating collapsible dock or a compact card in the grid. */
 export type FocusTimerMode = 'dock' | 'card';
+/** Where the floating focus dock parks along the bottom edge. */
+export type FocusDockPos = 'left' | 'center' | 'right';
 
 /** User-facing preferences (persisted alongside game state). */
 export interface Settings {
@@ -237,8 +245,12 @@ export interface Settings {
   dashCols: Partial<Record<DashWidgetId, DashCol>>;
   /** per-widget size overrides; missing → 'lg' */
   dashSizes: Partial<Record<DashWidgetId, DashSize>>;
-  /** how the focus timer renders on Today ('dock' = bottom-left collapsible) */
+  /** how the focus timer renders on Today ('dock' = floating collapsible pill) */
   focusTimer: FocusTimerMode;
+  /** which bottom corner the dock is parked in (drag it to move) */
+  focusDockPos: FocusDockPos;
+  /** the landing page has been passed once — later opens go straight to Today */
+  homeSeen: boolean;
   /** free-text contents of the Today-page note widget */
   dashNote: string;
   /**

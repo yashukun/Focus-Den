@@ -302,9 +302,19 @@ async fn media_control(app: String, action: String) -> Result<(), String> {
     media_control_impl(&app, &action)
 }
 
+/// Bring the main window back and focus it (dock click / re-open).
+#[cfg(target_os = "macos")]
+fn show_main(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
@@ -313,7 +323,36 @@ pub fn run() {
             load_state_backup,
             media_now_playing,
             media_control
-        ])
+        ]);
+
+    // macOS: closing the window hides the den instead of quitting it — the
+    // shift keeps ticking and the dock icon brings it straight back (the
+    // platform convention). Quitting for real is still ⌘Q, and the gap that
+    // leaves is reconciled into Away time on the next launch.
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_window_event(|window, event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+    });
+
+    #[cfg(target_os = "macos")]
+    {
+        builder
+            .build(tauri::generate_context!())
+            .expect("error while building Focus Den")
+            .run(|app, event| {
+                if let tauri::RunEvent::Reopen { .. } = event {
+                    show_main(app);
+                }
+            });
+    }
+
+    // Windows / Linux have no dock to re-open a hidden window from, so the
+    // close button keeps its normal meaning there.
+    #[cfg(not(target_os = "macos"))]
+    builder
         .run(tauri::generate_context!())
         .expect("error while running Focus Den");
 }

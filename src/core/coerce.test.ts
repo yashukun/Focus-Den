@@ -251,6 +251,24 @@ describe('coerceState (deep validation)', () => {
     expect(d.settings.focusTimer).toBe('dock');
   });
 
+  it('keeps the dock corner + landing flag, and drops nonsense ones', () => {
+    const s = coerceState({ v: 2, settings: { focusDockPos: 'right', homeSeen: true } })!;
+    expect(s.settings.focusDockPos).toBe('right');
+    expect(s.settings.homeSeen).toBe(true);
+    const d = coerceState({ v: 2, settings: { focusDockPos: 'ceiling', homeSeen: 'yes' } })!;
+    expect(d.settings.focusDockPos).toBe('left');
+    expect(d.settings.homeSeen).toBe(false);
+  });
+
+  it('keeps a sane presence stamp on the shift and drops garbage', () => {
+    const at = 1_754_000_000_000;
+    expect(coerceState({ v: 2, shift: { status: 'working', lastSeen: at } })!.shift.lastSeen).toBe(at);
+    expect(coerceState({ v: 2, shift: { status: 'working', lastSeen: 'now' } })!.shift.lastSeen)
+      .toBeUndefined();
+    expect(coerceState({ v: 2, shift: { status: 'working', lastSeen: Infinity } })!.shift.lastSeen)
+      .toBeUndefined();
+  });
+
   it('snaps the cat to its nearest perch (desk / floor / sill / shelf)', () => {
     const cat = getItem('room_cat')!;
     const ctx: PerchCtx = { windowId: 'window_classic', shelfAt: { x: 135, y: 54 } };

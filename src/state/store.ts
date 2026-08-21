@@ -33,8 +33,10 @@ import {
   getItem,
   isActive,
   isDateEditable,
+  markSeen,
   moveTicketToDay as planMoveTo,
   moveTicketToNextDay as planMoveNext,
+  reconcileAway,
   removeTicket as planRemove,
   shouldAutoEnd,
   switchStatus as coreSwitch,
@@ -47,6 +49,7 @@ import {
   type DashCol,
   type DashSize,
   type DashWidgetId,
+  type FocusDockPos,
   type FocusTimerMode,
   type DenConfig,
   type DenPart,
@@ -247,25 +250,37 @@ export const store = {
   },
 
   /**
-   * Per-second heartbeat. Enforces the breather grace auto-away (including any
-   * permanent grace-bonus perk) and the 12h auto wrap-up. A no-op (no persist,
-   * no notify) when nothing crosses a threshold — the common case.
+   * Per-second heartbeat. Reconciles any gap in presence into Away time,
+   * enforces the breather grace auto-away (including any permanent
+   * grace-bonus perk) and the 12h auto wrap-up, then re-stamps presence. A
+   * no-op (no persist, no notify) when nothing crosses a threshold — the
+   * common case.
    */
   tick(now: number): void {
-    const shift = state.shift;
-    const endTime = endTimeOf(shift);
-    if (!isActive(shift.status) || endTime == null) return;
+    // A gap since the den was last alive (app quit, crash, sleeping laptop)
+    // becomes Away time, so hours with the app shut never bank as flow.
+    let working = reconcileAway(state, now);
+
+    const endTime = endTimeOf(working.shift);
+    if (!isActive(working.shift.status) || endTime == null) {
+      if (working !== state) setState(working);
+      return;
+    }
 
     const t = Math.min(now, endTime);
-    const grace = applyBreakGrace(shift, t, state.perks.graceBonusMs);
-    const working = grace.autoOfflined ? { ...state, shift: grace.shift } : state;
+    const grace = applyBreakGrace(working.shift, t, working.perks.graceBonusMs);
+    if (grace.autoOfflined) working = { ...working, shift: grace.shift };
 
-    if (shouldAutoEnd(shift, now)) {
+    if (shouldAutoEnd(working.shift, now)) {
       const result = finalizeShift(working, endTime);
       summary = result.summary;
       setState(result.state);
       return;
     }
+
+    // Re-stamp presence (throttled inside markSeen, so this rarely persists).
+    const seen = markSeen(working.shift, now);
+    if (seen !== working.shift) working = { ...working, shift: seen };
 
     if (working !== state) setState(working);
   },
@@ -611,6 +626,18 @@ export const store = {
   setFocusTimer(mode: FocusTimerMode): void {
     if (state.settings.focusTimer === mode) return;
     setSettings({ focusTimer: mode });
+  },
+
+  /** Park the floating focus dock in a bottom corner (or the middle). */
+  setFocusDockPos(pos: FocusDockPos): void {
+    if (state.settings.focusDockPos === pos) return;
+    setSettings({ focusDockPos: pos });
+  },
+
+  /** The landing page has been passed — later opens go straight to Today. */
+  markHomeSeen(): void {
+    if (state.settings.homeSeen) return;
+    setSettings({ homeSeen: true });
   },
 
   setDashNote(text: string): void {

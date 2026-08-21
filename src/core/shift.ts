@@ -12,7 +12,15 @@
  * (on a switch, on auto-offline, or at finalize).
  */
 
-import { BREAK_KEYS, BREAK_LIMITS, DEFAULT_DASH_WIDGETS, GRACE_MS, SHIFT_MS } from './constants';
+import {
+  AWAY_GAP_MS,
+  BREAK_KEYS,
+  BREAK_LIMITS,
+  DEFAULT_DASH_WIDGETS,
+  GRACE_MS,
+  SEEN_REFRESH_MS,
+  SHIFT_MS,
+} from './constants';
 import { dateString, dayIndexMonSat } from './dates';
 import { defaultCharacter, defaultDen } from './den';
 import { computePoints } from './points';
@@ -69,6 +77,8 @@ export function defaultSettings() {
     dashCols: {},
     dashSizes: {},
     focusTimer: 'dock' as const,
+    focusDockPos: 'left' as const,
+    homeSeen: false,
     dashNote: '',
     denSetUp: false,
   };
@@ -233,6 +243,7 @@ export function clockIn(state: State, now: number): State {
     breakUsed: { break1: 0, break2: 0, lunch: 0 },
     tasks: [],
     clean: true,
+    lastSeen: now,
   };
   return { ...state, week, shift };
 }
@@ -310,6 +321,44 @@ export function applyBreakGrace(
       clean: false,
     },
     autoOfflined: true,
+  };
+}
+
+// ── Presence (the den was open) ─────────────────────────────────────────────
+
+/**
+ * Stamp "the den is alive" on the running shift, at most every
+ * `SEEN_REFRESH_MS`. Returns the same shift when there's nothing to write, so
+ * callers can skip persisting.
+ */
+export function markSeen(shift: ShiftState, now: number): ShiftState {
+  if (!isActive(shift.status)) return shift;
+  if (shift.lastSeen != null && now - shift.lastSeen < SEEN_REFRESH_MS) return shift;
+  return { ...shift, lastSeen: now };
+}
+
+/**
+ * Reconcile a gap in presence: if the den went unseen for longer than
+ * `AWAY_GAP_MS` mid-shift (quit, crash, closed laptop), bank everything up to
+ * the last moment it was alive and drift Away from there — so the dark hours
+ * land in `offline`, never in flow.
+ *
+ * Deliberately does NOT clear `clean`: a shut den isn't an overrun breather,
+ * and the day shouldn't be punished for the machine going to sleep.
+ */
+export function reconcileAway(state: State, now: number): State {
+  const shift = state.shift;
+  if (!isActive(shift.status)) return state;
+  const seen = shift.lastSeen;
+  if (seen == null || now - seen <= AWAY_GAP_MS) return state;
+  if (shift.status === 'offline') {
+    // already Away — the gap is simply more Away time
+    return { ...state, shift: { ...shift, lastSeen: now } };
+  }
+  const committed = commit(shift, seen);
+  return {
+    ...state,
+    shift: { ...committed, status: 'offline', statusStart: seen, lastSeen: now },
   };
 }
 

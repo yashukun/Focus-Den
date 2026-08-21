@@ -35,6 +35,7 @@ import type {
   DenConfig,
   DenPart,
   Equipped,
+  FocusDockPos,
   FocusTimerMode,
   Placement,
   ShirtId,
@@ -206,6 +207,12 @@ function coerceSettings(v: unknown, base: Settings): Settings {
     dashCols: coerceDashRecord(obj.dashCols, ['main', 'side'] as const),
     dashSizes: coerceDashRecord(obj.dashSizes, ['lg', 'sm'] as const),
     focusTimer: enumOf<FocusTimerMode>(obj.focusTimer, ['dock', 'card'], base.focusTimer),
+    focusDockPos: enumOf<FocusDockPos>(
+      obj.focusDockPos,
+      ['left', 'center', 'right'],
+      base.focusDockPos,
+    ),
+    homeSeen: bool(obj.homeSeen, base.homeSeen),
     dashNote: str(obj.dashNote, MAX_DASH_NOTE) ?? base.dashNote,
     denSetUp: bool(obj.denSetUp, base.denSetUp),
   };
@@ -233,7 +240,7 @@ function coerceSpans(v: unknown, keys: readonly string[]): Record<string, number
 
 function coerceShift(v: unknown, base: ShiftState): ShiftState {
   const obj = (v ?? {}) as Partial<Record<keyof ShiftState, unknown>>;
-  return {
+  const shift: ShiftState = {
     date: dateKeyOrNull(obj.date),
     status: enumOf<Status>(obj.status, STATUSES, base.status),
     clockIn: numOrNull(obj.clockIn, 0, MAX_EPOCH_MS),
@@ -243,6 +250,11 @@ function coerceShift(v: unknown, base: ShiftState): ShiftState {
     tasks: coerceTasks(obj.tasks),
     clean: bool(obj.clean, base.clean),
   };
+  // Absent on saves from before presence tracking — the next heartbeat stamps
+  // it, so upgrading never looks like a gap.
+  const lastSeen = numOrNull(obj.lastSeen, 0, MAX_EPOCH_MS);
+  if (lastSeen !== null) shift.lastSeen = lastSeen;
+  return shift;
 }
 
 function coerceDayFlags(v: unknown): Record<number, boolean> {

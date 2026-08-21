@@ -23,7 +23,10 @@ import {
   HOUR_MS,
   isBreakConsumed,
   liveAcc,
+  markSeen,
   MINUTE_MS,
+  reconcileAway,
+  SEEN_REFRESH_MS,
   resumeDay,
   shouldAutoEnd,
   switchStatus,
@@ -222,6 +225,58 @@ describe('finalize: clock-out', () => {
     const { summary } = finalizeShift({ ...defaultState(), shift: over }, MON + 8 * HOUR_MS);
     expect(summary!.clean).toBe(false);
     expect(summary!.points.cleanBonus).toBe(0);
+  });
+});
+
+describe('presence: a shut den never banks flow', () => {
+  it('turns a long unseen gap into Away time, from the moment it went quiet', () => {
+    const s = clockedIn(); // stamps lastSeen at clock-in
+    expect(s.shift.lastSeen).toBe(MON);
+
+    // The app was alive until MON+10m, then quit; we reopen 3 h later.
+    const quitAt = MON + 10 * MINUTE_MS;
+    const alive = { ...s, shift: markSeen(s.shift, quitAt) };
+    const reopened = reconcileAway(alive, quitAt + 3 * HOUR_MS);
+
+    expect(reopened.shift.status).toBe('offline');
+    // Only the 10 minutes with the app open count as flow…
+    expect(reopened.shift.acc.working).toBe(10 * MINUTE_MS);
+    // …and the dark hours land in offline, not in flow.
+    const live = liveAcc(reopened.shift, quitAt + 3 * HOUR_MS);
+    expect(live.working).toBe(10 * MINUTE_MS);
+    expect(live.offline).toBe(3 * HOUR_MS);
+    // A closed laptop is not an overrun breather — the day stays smooth.
+    expect(reopened.shift.clean).toBe(true);
+  });
+
+  it('leaves a live den alone and only re-stamps presence on the throttle', () => {
+    const s = clockedIn();
+    // A blip well inside the gap threshold changes nothing.
+    expect(reconcileAway(s, MON + 20 * 1000)).toBe(s);
+    // Presence is throttled: too soon → same object (nothing to persist).
+    expect(markSeen(s.shift, MON + 5 * 1000)).toBe(s.shift);
+    expect(markSeen(s.shift, MON + SEEN_REFRESH_MS).lastSeen).toBe(MON + SEEN_REFRESH_MS);
+    // Idle shifts are never stamped.
+    const idle = defaultState().shift;
+    expect(markSeen(idle, MON)).toBe(idle);
+  });
+
+  it('ignores saves that predate presence tracking (no false Away on upgrade)', () => {
+    const s = clockedIn();
+    const legacy: State = { ...s, shift: { ...s.shift, lastSeen: undefined } };
+    expect(reconcileAway(legacy, MON + 5 * HOUR_MS)).toBe(legacy);
+  });
+
+  it('keeps counting Away when the gap happened while already offline', () => {
+    const s = clockedIn();
+    const away: State = {
+      ...s,
+      shift: { ...s.shift, status: 'offline', statusStart: MON, lastSeen: MON },
+    };
+    const back = reconcileAway(away, MON + 2 * HOUR_MS);
+    expect(back.shift.status).toBe('offline');
+    expect(back.shift.statusStart).toBe(MON); // one continuous stretch
+    expect(liveAcc(back.shift, MON + 2 * HOUR_MS).offline).toBe(2 * HOUR_MS);
   });
 });
 

@@ -56,6 +56,12 @@ shipped apps can never self-update again — keep a backup.**
   shows a dismissible "Update & restart" toast (never auto-restarts);
   Settings keeps a manual check card (`DesktopUpdate.tsx`). Builds ≤ 2.6.0
   predate the banner — those users must check via Settings once.
+- **Closing ≠ quitting (macOS)** — `CloseRequested` is prevented and the
+  window hidden, so the shift keeps ticking and the dock icon
+  (`RunEvent::Reopen`) brings it back. ⌘Q still quits for real; the gap that
+  leaves is reconciled into Away time on the next launch (`reconcileAway`,
+  core.md). Windows/Linux keep close-to-quit — there's no dock to restore a
+  hidden window from (a tray icon would be the prerequisite).
 - **CI** — `desktop.yml`: macOS universal + Windows matrix on `v*` tags,
   attaches installers + `latest.json` to the GitHub Release.
 
