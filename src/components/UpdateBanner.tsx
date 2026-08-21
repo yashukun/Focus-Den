@@ -16,11 +16,20 @@ const RECHECK_MS = 4 * 60 * 60 * 1000;
 /** minimum gap between focus-triggered checks */
 const FOCUS_GAP_MS = 10 * 60 * 1000;
 
-type Phase = 'idle' | 'available' | 'installing' | 'dismissed';
+type Phase = 'idle' | 'available' | 'installing' | 'dismissed' | 'failed';
+
+/** Progress callback payload from the updater plugin (typed structurally so
+ * the web bundle never imports the plugin's types). */
+interface DownloadEvent {
+  event: 'Started' | 'Progress' | 'Finished';
+  data?: { contentLength?: number; chunkLength?: number };
+}
 
 export function UpdateBanner() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [version, setVersion] = useState('');
+  /** 0..1 while downloading, null before the size is known */
+  const [progress, setProgress] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -60,6 +69,7 @@ export function UpdateBanner() {
 
   async function install() {
     setPhase('installing');
+    setProgress(null);
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check();
@@ -67,18 +77,46 @@ export function UpdateBanner() {
         setPhase('dismissed');
         return;
       }
-      await update.downloadAndInstall();
+      let total = 0;
+      let got = 0;
+      await update.downloadAndInstall((e: DownloadEvent) => {
+        if (e.event === 'Started') total = e.data?.contentLength ?? 0;
+        else if (e.event === 'Progress') {
+          got += e.data?.chunkLength ?? 0;
+          if (total > 0) setProgress(Math.min(1, got / total));
+        } else if (e.event === 'Finished') setProgress(1);
+      });
       const { relaunch } = await import('@tauri-apps/plugin-process');
       await relaunch();
     } catch {
-      setPhase('available'); // failed — leave the offer up for another try
+      // Slow or dropped GitHub connection is the usual culprit — say so
+      // instead of silently reverting.
+      setPhase('failed');
     }
   }
 
   return (
     <div className="update-banner" role="status">
       {phase === 'installing' ? (
-        <span className="update-banner-text">Updating — the den will restart itself…</span>
+        <span className="update-banner-text">
+          {progress === null
+            ? 'Updating — contacting GitHub…'
+            : progress >= 1
+              ? 'Installing — the den will restart itself…'
+              : `Updating — downloading ${Math.round(progress * 100)}%…`}
+        </span>
+      ) : phase === 'failed' ? (
+        <>
+          <span className="update-banner-text">
+            The download didn’t make it — the connection to GitHub is slow right now.
+          </span>
+          <button className="btn btn-sm btn-primary" onClick={() => void install()}>
+            Try again
+          </button>
+          <button className="btn btn-sm" data-sound="none" onClick={() => setPhase('dismissed')}>
+            Later
+          </button>
+        </>
       ) : (
         <>
           <span className="update-banner-text">Focus Den {version} is ready.</span>

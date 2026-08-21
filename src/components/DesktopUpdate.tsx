@@ -13,8 +13,14 @@ type Phase =
   | { id: 'checking' }
   | { id: 'current' }
   | { id: 'available'; version: string }
-  | { id: 'installing' }
+  | { id: 'installing'; progress: number | null }
   | { id: 'error'; message: string };
+
+/** Progress payload from the updater plugin (structural — no plugin import). */
+interface DownloadEvent {
+  event: 'Started' | 'Progress' | 'Finished';
+  data?: { contentLength?: number; chunkLength?: number };
+}
 
 export function DesktopUpdate() {
   const [phase, setPhase] = useState<Phase>({ id: 'idle' });
@@ -40,7 +46,7 @@ export function DesktopUpdate() {
   }
 
   async function install() {
-    setPhase({ id: 'installing' });
+    setPhase({ id: 'installing', progress: null });
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check();
@@ -48,7 +54,15 @@ export function DesktopUpdate() {
         setPhase({ id: 'current' });
         return;
       }
-      await update.downloadAndInstall();
+      let total = 0;
+      let got = 0;
+      await update.downloadAndInstall((e: DownloadEvent) => {
+        if (e.event === 'Started') total = e.data?.contentLength ?? 0;
+        else if (e.event === 'Progress') {
+          got += e.data?.chunkLength ?? 0;
+          if (total > 0) setPhase({ id: 'installing', progress: Math.min(1, got / total) });
+        } else if (e.event === 'Finished') setPhase({ id: 'installing', progress: 1 });
+      });
       const { relaunch } = await import('@tauri-apps/plugin-process');
       await relaunch();
     } catch (e) {
@@ -70,7 +84,13 @@ export function DesktopUpdate() {
           </button>
         </>
       ) : phase.id === 'installing' ? (
-        <p className="muted">Updating — the den will restart itself…</p>
+        <p className="muted">
+          {phase.progress === null
+            ? 'Updating — contacting GitHub…'
+            : phase.progress >= 1
+              ? 'Installing — the den will restart itself…'
+              : `Updating — downloading ${Math.round(phase.progress * 100)}%…`}
+        </p>
       ) : (
         <div className="manage-row">
           <button
@@ -82,7 +102,9 @@ export function DesktopUpdate() {
           </button>
           {phase.id === 'current' && <span className="muted setting-msg">You’re up to date ✓</span>}
           {phase.id === 'error' && (
-            <span className="muted setting-msg">Couldn’t check right now — try again later.</span>
+            <span className="muted setting-msg">
+              Couldn’t reach GitHub (slow or offline) — try again in a moment.
+            </span>
           )}
         </div>
       )}
